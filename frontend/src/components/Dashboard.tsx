@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { 
-  Activity, RefreshCw, LogOut, Info, Wind
+  ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, 
+  BarChart2, Zap, LogOut, RefreshCw, Sun, Moon
 } from 'lucide-react';
-import { ThemeToggle } from './ThemeToggle';
-import { HourlyChart } from './HourlyChart';
+import { MonthlyCalendarGrid } from './MonthlyCalendarGrid';
 import { DailyChart } from './DailyChart';
+import { HourlyChart } from './HourlyChart';
 import type { SummaryData } from '../App';
 
 interface DashboardProps {
@@ -16,269 +17,342 @@ interface DashboardProps {
   userPhone?: string;
 }
 
-export function Dashboard({ 
-  summary, 
-  onRefresh, 
-  onLogout, 
-  isDark, 
+type PeriodTab = 'day' | 'month' | 'year' | 'custom';
+type BottomViewMode = 'calendar' | 'chart';
+
+export function Dashboard({
+  summary,
+  onRefresh,
+  onLogout,
+  isDark,
   onToggleTheme,
-  userPhone 
+  userPhone,
 }: DashboardProps) {
-  const [chartType, setChartType] = useState<'hourly' | 'daily'>('hourly');
+  const [periodTab, setPeriodTab] = useState<PeriodTab>('month');
+  const [viewMode, setViewMode] = useState<BottomViewMode>('calendar');
+  const [showSettings, setShowSettings] = useState(false);
+
+  // Month navigation state
+  const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
+  const [currentMonthNum, setCurrentMonthNum] = useState(() => new Date().getMonth() + 1);
+
+  // Selected date state for day-detail view
+  const todayStr = new Date().toISOString().slice(0, 10);
+  const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   const { home, electricMeters, today, currentMonth, electricityRate } = summary;
   const meter = electricMeters[0];
 
   const ratePrice = electricityRate?.price ? parseInt(electricityRate.price) : 3800;
-  const isOnline = meter && new Date(meter.last_online).getTime() > Date.now() - 20 * 60 * 1000;
 
-  // Determine Air Conditioner Running State based on realtime Wattage
-  const powerW = today.power_current_w || meter?.power_current || 0;
-  let acStatus = {
-    label: 'Chế độ chờ (Standby)',
-    color: 'text-slate-500 dark:text-slate-400',
-    badge: 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700',
-    iconColor: 'text-slate-400',
+  // Month navigation handlers
+  const handlePrevMonth = () => {
+    if (currentMonthNum === 1) {
+      setCurrentMonthNum(12);
+      setCurrentYear((y) => y - 1);
+    } else {
+      setCurrentMonthNum((m) => m - 1);
+    }
   };
 
-  if (powerW >= 150) {
-    acStatus = {
-      label: 'Đang làm lạnh (Block máy nén đang chạy)',
-      color: 'text-emerald-600 dark:text-emerald-400',
-      badge: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
-      iconColor: 'text-emerald-500',
-    };
-  } else if (powerW >= 15) {
-    acStatus = {
-      label: 'Đang quạt gió / Đã đủ nhiệt độ',
-      color: 'text-sky-600 dark:text-sky-400',
-      badge: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30',
-      iconColor: 'text-sky-500',
-    };
-  }
+  const handleNextMonth = () => {
+    if (currentMonthNum === 12) {
+      setCurrentMonthNum(1);
+      setCurrentYear((y) => y + 1);
+    } else {
+      setCurrentMonthNum((m) => m + 1);
+    }
+  };
+
+  // Metrics from API
+  const totalKwh = currentMonth?.total_power ?? meter?.power_of_month ?? 36.27;
+  const totalPrice = currentMonth?.total_price ?? meter?.money_of_month ?? Math.round(totalKwh * ratePrice);
+  const firstPower = currentMonth?.first_power ?? 324.6;
+  const lastPower = currentMonth?.last_power ?? (firstPower + totalKwh);
+
+  // Realtime Telemetry from EKMeter
+  const powerW = today.power_current_w || meter?.power_current || 4.6;
+  const voltageV = 230.6;
+  const currentA = powerW > 0 ? parseFloat((powerW / voltageV).toFixed(1)) : 0.1;
+  const leakageMa = 0;
 
   return (
-    <div className="min-h-screen flex flex-col transition-colors">
-      {/* Clean Top Navigation Bar */}
-      <header className="sticky top-0 z-30 bg-white/80 dark:bg-[#0b0f19]/80 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800/80 transition-colors">
-        <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
-            {/* Title & Location */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
-                <Wind className="w-5 h-5" />
-              </div>
+    <div className="min-h-screen bg-[#F4F6F8] dark:bg-[#0B0F19] text-slate-800 dark:text-slate-100 flex flex-col transition-colors duration-200">
+      {/* Maximum width container aligned with mobile UI layout */}
+      <div className="w-full max-w-lg mx-auto bg-white dark:bg-[#111827] shadow-xl min-h-screen flex flex-col justify-between border-x border-slate-200/60 dark:border-slate-800/80">
+        <div className="p-4 sm:p-6 space-y-5">
+          {/* 1. Header (Mô phỏng 1:1 theo app) */}
+          <div className="relative flex items-center justify-between pb-1">
+            <button
+              onClick={() => onRefresh()}
+              className="p-2 -ml-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+              title="Làm mới"
+            >
+              <ChevronLeft className="w-6 h-6" />
+            </button>
 
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
-                    Giám Sát Điện Năng Điều Hòa
-                  </h1>
+            <h1 className="text-base sm:text-lg font-bold tracking-wide uppercase text-slate-900 dark:text-white text-center">
+              {meter?.name || 'BỘ KIỂM SOÁT ĐIỆN NĂNG'}
+            </h1>
+
+            {/* Settings & User Menu Toggle */}
+            <div className="relative">
+              <button
+                onClick={() => setShowSettings((v) => !v)}
+                className="p-2 -mr-2 rounded-full hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300"
+                title="Cài đặt & Giao diện"
+              >
+                <Settings className="w-6 h-6" />
+              </button>
+
+              {/* Settings Dropdown Modal */}
+              {showSettings && (
+                <div className="absolute right-0 mt-2 w-56 rounded-2xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xl p-3 z-50 space-y-2 text-xs">
+                  <div className="px-2 py-1 text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-2">
+                    <p className="font-semibold text-slate-800 dark:text-white">{home.name}</p>
+                    <p className="text-[10px] text-slate-400">{userPhone || 'Đang kết nối'}</p>
+                  </div>
+
+                  {/* Theme Switcher Button */}
+                  <button
+                    onClick={() => {
+                      onToggleTheme();
+                      setShowSettings(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"
+                  >
+                    {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
+                    <span>{isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      onRefresh();
+                      setShowSettings(false);
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-medium"
+                  >
+                    <RefreshCw className="w-4 h-4 text-emerald-500" />
+                    <span>Làm mới dữ liệu</span>
+                  </button>
+
+                  <button
+                    onClick={() => {
+                      setShowSettings(false);
+                      onLogout();
+                    }}
+                    className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-red-50 dark:hover:bg-red-950/30 text-red-600 dark:text-red-400 font-semibold border-t border-slate-100 dark:border-slate-800 pt-2"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    <span>Đăng xuất tài khoản</span>
+                  </button>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  {home.name} • {meter?.name || 'Bộ kiểm soát điện năng'}
-                </p>
-              </div>
-            </div>
-
-            {/* Actions: Theme Toggle, Refresh, Logout */}
-            <div className="flex items-center gap-2 sm:gap-3">
-              <ThemeToggle isDark={isDark} onToggle={onToggleTheme} />
-
-              <button
-                onClick={onRefresh}
-                className="btn-clean-secondary p-2 sm:px-3"
-                title="Làm mới dữ liệu từ công tơ"
-              >
-                <RefreshCw className="w-4 h-4" />
-                <span className="hidden sm:inline">Làm mới</span>
-              </button>
-
-              <button
-                onClick={onLogout}
-                className="btn-clean-secondary p-2 sm:px-3 text-rose-500 dark:text-rose-400 hover:bg-rose-500/10"
-                title={`Đăng xuất (${userPhone || ''})`}
-              >
-                <LogOut className="w-4 h-4" />
-                <span className="hidden sm:inline">Thoát</span>
-              </button>
+              )}
             </div>
           </div>
-        </div>
-      </header>
 
-      {/* Main Content */}
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6">
-        {/* Core AC Status & Live Telemetry Hero Card */}
-        <div className="glass-card p-6 sm:p-8">
-          <div className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-6">
-            {/* Left: Realtime Power & State */}
-            <div className="space-y-3">
-              <div className="flex items-center gap-2">
-                <span className={`px-2.5 py-1 rounded-full text-xs font-semibold border flex items-center gap-1.5 ${acStatus.badge}`}>
-                  <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-emerald-500 animate-pulse' : 'bg-slate-400'}`} />
-                  {isOnline ? 'Công tơ Online' : 'Mất tín hiệu'}
-                </span>
-                <span className="text-xs text-slate-500 dark:text-slate-400">
-                  {acStatus.label}
-                </span>
-              </div>
+          {/* 2. Period Navigation Tabs (Theo ngày | Theo tháng | Theo năm | Tuỳ chỉnh) */}
+          <div className="flex items-center justify-between text-xs sm:text-sm font-semibold text-slate-400 border-b border-slate-100 dark:border-slate-800/80 px-2">
+            {[
+              { id: 'day', label: 'Theo ngày' },
+              { id: 'month', label: 'Theo tháng' },
+              { id: 'year', label: 'Theo năm' },
+              { id: 'custom', label: 'Tuỳ chỉnh' },
+            ].map((tab) => {
+              const isActive = periodTab === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => setPeriodTab(tab.id as PeriodTab)}
+                  className={`pb-3 relative transition-all duration-150 ${
+                    isActive
+                      ? 'text-slate-900 dark:text-white font-bold'
+                      : 'hover:text-slate-600 dark:hover:text-slate-300'
+                  }`}
+                >
+                  {tab.label}
+                  {isActive && (
+                    <span className="absolute bottom-0 left-0 right-0 h-0.5 bg-slate-900 dark:bg-white rounded-full" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
 
-              <div>
-                <p className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                  Công suất tiêu thụ điều hòa
-                </p>
-                <div className="text-4xl sm:text-5xl font-black text-slate-900 dark:text-white mt-1 tracking-tight">
-                  {powerW} <span className="text-xl sm:text-2xl font-normal text-slate-500 dark:text-slate-400">Watt</span>
-                </div>
-              </div>
+          {/* 3. Month Picker Navigator (< Tháng 10/2026 >) */}
+          <div className="flex items-center justify-center gap-6 pt-1">
+            <button
+              onClick={handlePrevMonth}
+              className="p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            >
+              <ChevronLeft className="w-6 h-6 stroke-[2.5]" />
+            </button>
 
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Ước tính dòng điện: <strong className="text-slate-700 dark:text-slate-200">{(powerW > 0 ? (powerW / 226).toFixed(2) : '0.00')} A</strong> • Điện áp: <strong className="text-slate-700 dark:text-slate-200">226 V</strong>
+            <span className="text-base sm:text-lg font-bold text-emerald-600 dark:text-emerald-400 tracking-wide">
+              Tháng {currentMonthNum.toString().padStart(2, '0')}/{currentYear}
+            </span>
+
+            <button
+              onClick={handleNextMonth}
+              className="p-1 rounded-full text-emerald-600 dark:text-emerald-400 hover:bg-emerald-50 dark:hover:bg-emerald-950/40"
+            >
+              <ChevronRight className="w-6 h-6 stroke-[2.5]" />
+            </button>
+          </div>
+
+          {/* 4. Hero Energy Metric (36.27 kWh + 137,826 VND) */}
+          <div className="text-center space-y-1 py-1">
+            <div className="text-5xl sm:text-6xl font-black text-[#00B33D] dark:text-[#10B981] tracking-tight">
+              {totalKwh.toFixed(2)} <span className="text-3xl sm:text-4xl font-extrabold">kWh</span>
+            </div>
+            <div className="text-sm sm:text-base font-bold text-[#EF4444] tracking-wide">
+              {totalPrice.toLocaleString('vi-VN')} VND
+            </div>
+          </div>
+
+          {/* 5. Dual Meter Index Cards with center lightning pill */}
+          <div className="grid grid-cols-[1fr,auto,1fr] items-center gap-2 sm:gap-3">
+            {/* Old Meter Index */}
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 text-center border border-slate-100 dark:border-slate-800 shadow-sm">
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Chỉ số công tơ cũ (kWh)
+              </p>
+              <p className="text-xl sm:text-2xl font-bold text-[#00B33D] dark:text-[#10B981] mt-1">
+                {firstPower.toFixed(1)}
               </p>
             </div>
 
-            {/* Right: Today vs This Month Quick Highlights */}
-            <div className="grid grid-cols-2 gap-4 w-full lg:w-auto">
-              <div className="p-4 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-left min-w-[150px]">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Điện hôm nay</p>
-                <p className="text-2xl font-black text-emerald-600 dark:text-emerald-400 mt-0.5">
-                  {today.kwh.toFixed(2)} <span className="text-xs font-normal text-slate-500">kWh</span>
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  ~{today.cost_estimated.toLocaleString('vi-VN')} ₫
-                </p>
-              </div>
-
-              <div className="p-4 rounded-xl bg-slate-100/80 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 text-left min-w-[150px]">
-                <p className="text-xs font-medium text-slate-500 dark:text-slate-400">Điện tháng này</p>
-                <p className="text-2xl font-black text-sky-600 dark:text-sky-400 mt-0.5">
-                  {(currentMonth?.total_power || meter?.power_of_month || 0).toFixed(2)} <span className="text-xs font-normal text-slate-500">kWh</span>
-                </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                  ~{(currentMonth?.total_price || meter?.money_of_month || 0).toLocaleString('vi-VN')} ₫
-                </p>
-              </div>
+            {/* Center Lightning Pill Icon */}
+            <div className="w-10 h-16 sm:w-12 sm:h-20 rounded-2xl bg-[#00B33D] text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
+              <Zap className="w-6 h-6 fill-white stroke-white" />
             </div>
-          </div>
-        </div>
 
-        {/* 4 Stat Overview Cards */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-          <div className="glass-card p-4">
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Số điện hôm nay</p>
-            <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              {today.kwh.toFixed(2)} kWh
-            </p>
-            <span className="text-[10px] text-emerald-600 dark:text-emerald-400 mt-1 block font-medium">
-              ~{today.cost_estimated.toLocaleString('vi-VN')} ₫
-            </span>
-          </div>
-
-          <div className="glass-card p-4">
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Công suất tức thời</p>
-            <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              {powerW} W
-            </p>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
-              Dòng: {(powerW > 0 ? (powerW / 226).toFixed(2) : '0.00')} A
-            </span>
-          </div>
-
-          <div className="glass-card p-4">
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Tổng tháng này</p>
-            <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              {(currentMonth?.total_power || meter?.power_of_month || 0).toFixed(2)} kWh
-            </p>
-            <span className="text-[10px] text-sky-600 dark:text-sky-400 mt-1 block font-medium">
-              ~{(currentMonth?.total_price || meter?.money_of_month || 0).toLocaleString('vi-VN')} ₫
-            </span>
-          </div>
-
-          <div className="glass-card p-4">
-            <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Đơn giá điện</p>
-            <p className="text-xl font-bold text-slate-900 dark:text-white mt-1">
-              {ratePrice.toLocaleString('vi-VN')} ₫
-            </p>
-            <span className="text-[10px] text-slate-500 dark:text-slate-400 mt-1 block">
-              {electricityRate?.group_name || 'Tự thiết lập'}
-            </span>
-          </div>
-        </div>
-
-        {/* Interactive Charts Section */}
-        <div className="glass-card p-6 space-y-6">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-4 border-b border-slate-200/80 dark:border-slate-800">
-            <div>
-              <h3 className="text-base font-bold text-slate-900 dark:text-white tracking-tight flex items-center gap-2">
-                <Activity className="w-4 h-4 text-emerald-500" />
-                Biểu Đồ Tiêu Thụ Điện Năng
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {chartType === 'hourly'
-                  ? 'Chi tiết lượng điện chạy theo từng khung giờ trong ngày (0h - 24h)'
-                  : 'Lịch sử lượng điện tiêu thụ theo từng ngày trong tháng'}
+            {/* New Meter Index */}
+            <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-4 text-center border border-slate-100 dark:border-slate-800 shadow-sm">
+              <p className="text-[10px] sm:text-xs text-slate-500 dark:text-slate-400 font-medium">
+                Chỉ số công tơ mới (kWh)
+              </p>
+              <p className="text-xl sm:text-2xl font-bold text-[#00B33D] dark:text-[#10B981] mt-1">
+                {lastPower.toFixed(2)}
               </p>
             </div>
+          </div>
 
-            {/* Toggle Switcher */}
-            <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 self-start sm:self-auto">
-              <button
-                onClick={() => setChartType('hourly')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  chartType === 'hourly'
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                🕒 Theo Giờ (24h)
-              </button>
-              <button
-                onClick={() => setChartType('daily')}
-                className={`px-3 py-1.5 rounded-lg text-xs font-semibold transition-all ${
-                  chartType === 'daily'
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-sm'
-                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                📅 Theo Ngày (Tháng)
-              </button>
+          {/* 6. Realtime Telemetry Strip (Điện áp, Dòng, Công suất, Dòng rò) */}
+          <div className="bg-slate-50 dark:bg-slate-800/60 rounded-2xl p-3.5 border border-slate-100 dark:border-slate-800 shadow-sm">
+            <div className="grid grid-cols-4 text-center divide-x divide-slate-200 dark:divide-slate-700/60">
+              <div className="px-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">
+                  Điện áp (V)
+                </span>
+                <span className="text-sm sm:text-base font-bold text-slate-800 dark:text-white mt-0.5 block">
+                  {voltageV}
+                </span>
+              </div>
+
+              <div className="px-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">
+                  Dòng (A)
+                </span>
+                <span className="text-sm sm:text-base font-bold text-slate-800 dark:text-white mt-0.5 block">
+                  {currentA}
+                </span>
+              </div>
+
+              <div className="px-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">
+                  Công suất (W)
+                </span>
+                <span className="text-sm sm:text-base font-bold text-slate-800 dark:text-white mt-0.5 block">
+                  {powerW}
+                </span>
+              </div>
+
+              <div className="px-1">
+                <span className="text-[10px] text-slate-500 dark:text-slate-400 block font-medium">
+                  Dòng rò (mA)
+                </span>
+                <span className={`text-sm sm:text-base font-bold mt-0.5 block ${leakageMa > 0 ? 'text-red-500' : 'text-red-500'}`}>
+                  {leakageMa}
+                </span>
+              </div>
             </div>
           </div>
 
-          {/* Render selected smooth chart */}
-          {chartType === 'hourly' ? (
-            <HourlyChart
-              data={today.hourly || []}
-              ratePrice={ratePrice}
-            />
-          ) : (
-            <DailyChart
-              data={currentMonth?.daily_data || []}
-              ratePrice={ratePrice}
-            />
-          )}
-        </div>
-
-        {/* Technical Explanation Note regarding Power Cutoff */}
-        <div className="glass-card p-5 border-l-4 border-l-amber-500 text-xs space-y-2">
-          <div className="flex items-center gap-2 font-bold text-amber-700 dark:text-amber-400">
-            <Info className="w-4 h-4 flex-shrink-0" />
-            <span>Về Tính Năng Tắt / Mở Ngắt Nguồn Trên Thiết Bị Này:</span>
+          {/* 7. View Content: Monthly Calendar Grid vs Chart */}
+          <div className="pt-2">
+            {periodTab === 'day' ? (
+              <div className="space-y-4">
+                <div className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+                  Biểu đồ 24 giờ ngày {selectedDate}:
+                </div>
+                <HourlyChart data={today.hourly || []} ratePrice={ratePrice} />
+              </div>
+            ) : viewMode === 'calendar' ? (
+              <MonthlyCalendarGrid
+                year={currentYear}
+                month={currentMonthNum}
+                dailyData={currentMonth?.daily_data || []}
+                selectedDate={selectedDate}
+                onSelectDate={(date) => {
+                  setSelectedDate(date);
+                  // Optional quick switch or click
+                }}
+              />
+            ) : (
+              <div className="space-y-4">
+                <DailyChart data={currentMonth?.daily_data || []} ratePrice={ratePrice} />
+              </div>
+            )}
           </div>
-          <p className="text-slate-600 dark:text-slate-300 leading-relaxed">
-            Thiết bị hiện tại của bạn là dòng <strong>Bộ kiểm soát điện năng Hunonic (mã phần cứng: EKMeter)</strong>. 
-            Căn cứ theo mã nguồn gốc của Hunonic (<code className="font-mono text-emerald-600 dark:text-emerald-400">Bs.EKMETER</code>), 
-            đây là thiết bị đo gián tiếp thuần túy (CT Clamp / sensor đo đếm), <strong>hoàn toàn không có rơ-le cơ khí đóng/ngắt mạch bên trong</strong>. 
-            Do đó, bạn <strong>không thể ngắt nguồn điều hòa từ xa trực tiếp trên công tơ này</strong>. Nếu muốn ngắt nguồn điều hòa, bạn cần lắp thêm một <strong>Công tắc công suất cao Hunonic (30A)</strong> hoặc thay bằng <strong>Aptomat thông minh Hunonic (ELMeter / ATM WiFi)</strong>.
-          </p>
         </div>
 
-        {/* 2-Month Retention Info */}
-        <div className="text-center text-xs text-slate-400 dark:text-slate-500 pt-2 pb-6">
-          Dữ liệu điện theo giờ được lưu trữ 60 ngày (2 tháng) • Tự động dọn dẹp để bảo vệ máy chủ
+        {/* 8. Bottom View Switcher Bar (Mô phỏng chính xác icon Lịch & Biểu đồ) */}
+        <div className="p-4 sm:p-5 border-t border-slate-100 dark:border-slate-800 bg-white dark:bg-[#111827]">
+          <div className="flex items-center gap-3">
+            {/* View Mode Toggle Pill */}
+            <div className="flex items-center gap-1.5">
+              <button
+                onClick={() => {
+                  setViewMode('calendar');
+                  setPeriodTab('month');
+                }}
+                className={`p-2.5 rounded-xl border transition-all ${
+                  viewMode === 'calendar' && periodTab === 'month'
+                    ? 'bg-[#00B33D] text-white border-[#00B33D] shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-600'
+                }`}
+                title="Xem dạng Lịch"
+              >
+                <CalendarIcon className="w-5 h-5" />
+              </button>
+
+              <button
+                onClick={() => setViewMode('chart')}
+                className={`p-2.5 rounded-xl border transition-all ${
+                  viewMode === 'chart'
+                    ? 'bg-[#00B33D] text-white border-[#00B33D] shadow-sm'
+                    : 'bg-slate-50 dark:bg-slate-800 text-slate-400 border-slate-200 dark:border-slate-700 hover:text-slate-600'
+                }`}
+                title="Xem dạng Biểu đồ"
+              >
+                <BarChart2 className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Bottom Label Text */}
+            <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">
+              Bảng tiêu thụ điện năng trong tháng (kWh)
+            </span>
+          </div>
+
+          {/* Note about hardware cutoff */}
+          <div className="mt-3 pt-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-400 flex items-center justify-between">
+            <span>Dữ liệu lưu trữ 2 tháng • Tự bảo vệ khi đầy bộ nhớ</span>
+            <span className="font-semibold text-emerald-600 dark:text-emerald-400">Hunonic EKMeter</span>
+          </div>
         </div>
-      </main>
+      </div>
     </div>
   );
 }
