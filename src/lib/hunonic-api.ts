@@ -5,8 +5,9 @@
 import crypto from 'node:crypto';
 
 export interface HunonicConfig {
-  phone: string;
-  password: string;
+  phone?: string;
+  password?: string;
+  token?: string;
   baseUrl?: string;
 }
 
@@ -113,6 +114,44 @@ export class HunonicApiClient {
   constructor(config: HunonicConfig) {
     this.config = config;
     this.baseUrl = config.baseUrl || 'https://web.hunonic.com/api/api';
+    if (config.token) {
+      this.token = config.token;
+      this.tokenExpiry = Date.now() + 30 * 24 * 60 * 60 * 1000; // 30 days
+    }
+  }
+
+  /**
+   * Static direct login helper
+   */
+  public static async loginDirect(phone: string, password: string, baseUrl: string = 'https://web.hunonic.com/api/api'): Promise<{ token: string; expiresAt: number }> {
+    const trimmed = phone.trim().replace(/\s+/g, '');
+    let formattedPhone = trimmed;
+    if (trimmed.startsWith('+84')) formattedPhone = '0' + trimmed.slice(3);
+    else if (trimmed.startsWith('84') && trimmed.length === 11) formattedPhone = '0' + trimmed.slice(2);
+
+    const passwordHash = crypto.createHash('md5').update(password).digest('hex');
+
+    const res = await fetch(`${baseUrl}/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Accept': 'application/json',
+      },
+      body: JSON.stringify({
+        phone: formattedPhone,
+        password: passwordHash,
+      }),
+    });
+
+    const body = await res.json() as LoginResponse;
+    if (!body.status || !body.data?.token) {
+      throw new Error(body.message || 'Số điện thoại hoặc mật khẩu không chính xác!');
+    }
+
+    return {
+      token: body.data.token,
+      expiresAt: body.data.expiresAt * 1000,
+    };
   }
 
   /**
@@ -178,6 +217,9 @@ export class HunonicApiClient {
    * Login and cache token
    */
   async login(): Promise<string> {
+    if (!this.config.phone || !this.config.password) {
+      throw new Error('Cần số điện thoại và mật khẩu để đăng nhập!');
+    }
     const phone = this.formatPhone(this.config.phone);
     const passwordHash = this.md5(this.config.password);
 
@@ -203,7 +245,11 @@ export class HunonicApiClient {
    */
   async getValidToken(): Promise<string> {
     if (!this.token || Date.now() >= this.tokenExpiry - 60000) {
-      await this.login();
+      if (this.config.phone && this.config.password) {
+        await this.login();
+      } else {
+        throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
+      }
     }
     return this.token!;
   }
@@ -301,11 +347,11 @@ export class HunonicApiClient {
   }
 }
 
-export function createHunonicClient(): HunonicApiClient {
-  const phone = process.env.HUNONIC_PHONE;
-  const password = process.env.HUNONIC_PASSWORD;
-  if (!phone || !password) {
-    throw new Error('HUNONIC_PHONE and HUNONIC_PASSWORD must be set in environment');
+export function createHunonicClient(token?: string): HunonicApiClient {
+  if (token) {
+    return new HunonicApiClient({ token });
   }
+  const phone = process.env.HUNONIC_PHONE || '';
+  const password = process.env.HUNONIC_PASSWORD || '';
   return new HunonicApiClient({ phone, password });
 }

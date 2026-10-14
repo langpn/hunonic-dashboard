@@ -10,7 +10,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { createHunonicClient, type Device, type Home } from './lib/hunonic-api.js';
+import { createHunonicClient, HunonicApiClient, type Device, type Home } from './lib/hunonic-api.js';
 import { hourlyStorage } from './lib/hourly-storage.js';
 
 const app = new Hono();
@@ -38,7 +38,16 @@ app.get('/health', (c) => c.json({
 // Initialize Hunonic client singleton
 let hunonicClient: ReturnType<typeof createHunonicClient> | null = null;
 
-function getClient() {
+function getClient(c?: any) {
+  if (c) {
+    const authHeader = c.req.header('Authorization');
+    if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.slice(7).trim();
+      if (token) {
+        return createHunonicClient(token);
+      }
+    }
+  }
   if (!hunonicClient) {
     hunonicClient = createHunonicClient();
   }
@@ -56,7 +65,27 @@ function parseJsonSafe(value: any): Record<string, any> {
 }
 
 // ==============================================================================
-// 1. DASHBOARD & ENERGY TELEMETRY
+// 0. AUTHENTICATION (Dynamic Login from Web)
+// ==============================================================================
+
+app.post('/api/auth/login', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { phone, password } = body;
+    if (!phone || !password) {
+      return c.json({ success: false, error: 'Vui lòng nhập số điện thoại và mật khẩu!' }, 400);
+    }
+    const result = await HunonicApiClient.loginDirect(phone, password);
+    // Invalidate cache on new login
+    summaryCache = null;
+    return c.json({ success: true, data: result });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Đăng nhập thất bại!' }, 401);
+  }
+});
+
+// ==============================================================================
+// 1. DASHBOARD & ENERGY TELEMETRY (Focused on Air Conditioner Meter)
 // ==============================================================================
 
 app.get('/api/dashboard/summary', async (c) => {
@@ -67,7 +96,7 @@ app.get('/api/dashboard/summary', async (c) => {
       return c.json({ success: true, data: summaryCache.data, cached: true });
     }
 
-    const client = getClient();
+    const client = getClient(c);
     
     // 1. Fetch homes
     const homes = await client.getHomes();
@@ -115,7 +144,6 @@ app.get('/api/dashboard/summary', async (c) => {
         if (todayPoint) {
           todayKwh = todayPoint.value || 0;
         } else if (monthData.graph_data.length > 0) {
-          // If today isn't sealed yet, pick the most recent day with reading
           const nonZero = monthData.graph_data.filter(d => d.value > 0);
           if (nonZero.length > 0) {
             todayKwh = nonZero[nonZero.length - 1].value;

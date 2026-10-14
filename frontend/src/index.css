@@ -3,12 +3,27 @@
 @tailwind utilities;
 
 :root {
-  --bg-abyss: #04070d;
-  --bg-card: rgba(13, 19, 33, 0.75);
-  --border-neon: rgba(0, 245, 155, 0.18);
-  --glow-emerald: 0 0 25px rgba(0, 245, 155, 0.25);
-  --glow-cyan: 0 0 25px rgba(0, 229, 255, 0.25);
-  --glow-violet: 0 0 25px rgba(139, 92, 246, 0.25);
+  --bg-primary: #f8fafc;
+  --bg-card: rgba(255, 255, 255, 0.9);
+  --border-color: rgba(226, 232, 240, 0.8);
+  --text-primary: #0f172a;
+  --text-secondary: #475569;
+  --text-muted: #94a3b8;
+  --accent-emerald: #059669;
+  --accent-cyan: #0284c7;
+  --card-shadow: 0 4px 20px -2px rgba(0, 0, 0, 0.05);
+}
+
+.dark {
+  --bg-primary: #0b0f19;
+  --bg-card: rgba(17, 24, 39, 0.75);
+  --border-color: rgba(255, 255, 255, 0.08);
+  --text-primary: #f8fafc;
+  --text-secondary: #94a3b8;
+  --text-muted: #64748b;
+  --accent-emerald: #10b981;
+  --accent-cyan: #38bdf8;
+  --card-shadow: 0 10px 30px -5px rgba(0, 0, 0, 0.4);
 }
 
 * {
@@ -17,117 +32,67 @@
 
 body {
   margin: 0;
-  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
-  background-color: #04070d;
-  background-image: 
-    radial-gradient(circle at 15% 10%, rgba(0, 245, 155, 0.08) 0%, transparent 40%),
-    radial-gradient(circle at 85% 20%, rgba(0, 229, 255, 0.07) 0%, transparent 40%),
-    radial-gradient(circle at 50% 80%, rgba(139, 92, 246, 0.06) 0%, transparent 50%),
-    radial-gradient(circle at 80% 90%, rgba(245, 158, 11, 0.05) 0%, transparent 35%);
-  background-attachment: fixed;
-  color: #e2e8f0;
+  background-color: var(--bg-primary);
+  color: var(--text-primary);
   min-height: 100vh;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 
-/* Custom scrollbar */
+/* Custom Clean Scrollbar */
 ::-webkit-scrollbar {
   width: 6px;
   height: 6px;
 }
 ::-webkit-scrollbar-track {
-  background: #060913;
+  background: transparent;
 }
 ::-webkit-scrollbar-thumb {
-  background: #1e293b;
+  background: rgba(148, 163, 184, 0.3);
   border-radius: 9999px;
 }
 ::-webkit-scrollbar-thumb:hover {
-  background: #00f59b;
+  background: rgba(148, 163, 184, 0.5);
 }
 
-@layer components {
-  /* Mystic Glassmorphism Card */
-  .mystic-card {
-    background: rgba(11, 17, 30, 0.65);
-    backdrop-filter: blur(16px);
-    -webkit-backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.07);
-    border-radius: 1rem;
-    box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.45);
-    transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-  }
-
-  .mystic-card:hover {
-    border-color: rgba(0, 245, 155, 0.25);
-    box-shadow: 0 12px 40px -10px rgba(0, 245, 155, 0.15);
-  }
-
-  /* Glowing Neon Borders */
-  .glow-border-emerald {
-    border: 1px solid rgba(0, 245, 155, 0.3);
-    box-shadow: inset 0 0 15px rgba(0, 245, 155, 0.08), 0 0 20px rgba(0, 245, 155, 0.15);
-  }
-
-  .glow-border-cyan {
-    border: 1px solid rgba(0, 229, 255, 0.3);
-    box-shadow: inset 0 0 15px rgba(0, 229, 255, 0.08), 0 0 20px rgba(0, 229, 255, 0.15);
-  }
-
-  .glow-border-violet {
-    border: 1px solid rgba(139, 92, 246, 0.3);
-    box-shadow: inset 0 0 15px rgba(139, 92, 246, 0.08), 0 0 20px rgba(139, 92, 246, 0.15);
-  }
-
-  /* Button Styles */
-  .btn-mystic {
-    @apply px-4 py-2 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2;
-    background: linear-gradient(135deg, rgba(0, 245, 155, 0.15), rgba(0, 229, 255, 0.1));
-    border: 1px solid rgba(0, 245, 155, 0.3);
-    color: #00f59b;
-  }
-
-  .btn-mystic:hover {
-    background: linear-gradient(135deg, rgba(0, 245, 155, 0.25), rgba(0, 229, 255, 0.2));
-    border-color: #00f59b;
-    box-shadow: 0 0 20px rgba(0, 245, 155, 0.35);
-    transform: translateY(-1px);
-  }
-
-  .btn-mystic-secondary {
-    @apply px-4 py-2 rounded-xl font-medium transition-all duration-300 flex items-center justify-center gap-2 text-slate-300;
-    background: rgba(255, 255, 255, 0.04);
-    border: 1px solid rgba(255, 255, 255, 0.09);
-  }
-
-  .btn-mystic-secondary:hover {
-    background: rgba(255, 255, 255, 0.08);
-    border-color: rgba(255, 255, 255, 0.2);
-    color: #fff;
-  }
-
-  /* HUD Pulse Indicator */
-  .hud-pulse {
-    animation: hudPulse 2s infinite;
-  }
+/* Elegant Glass Card */
+.glass-card {
+  background: var(--bg-card);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-color);
+  border-radius: 1rem;
+  box-shadow: var(--card-shadow);
+  transition: all 0.25s ease;
 }
 
-@keyframes hudPulse {
-  0% {
-    box-shadow: 0 0 0 0 rgba(0, 245, 155, 0.5);
-  }
-  70% {
-    box-shadow: 0 0 0 8px rgba(0, 245, 155, 0);
-  }
-  100% {
-    box-shadow: 0 0 0 0 rgba(0, 245, 155, 0);
-  }
+.glass-card:hover {
+  border-color: rgba(16, 185, 129, 0.3);
 }
 
-/* Gradient Text Shimmer */
-.shimmer-text {
-  background: linear-gradient(90deg, #00f59b 0%, #00e5ff 50%, #8b5cf6 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
+/* Buttons */
+.btn-clean {
+  @apply px-4 py-2 rounded-xl text-xs font-semibold transition-all duration-200 flex items-center justify-center gap-2;
+  background: rgba(16, 185, 129, 0.1);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  color: #10b981;
+}
+
+.btn-clean:hover {
+  background: rgba(16, 185, 129, 0.2);
+  border-color: #10b981;
+}
+
+.btn-clean-secondary {
+  @apply px-3.5 py-2 rounded-xl text-xs font-medium transition-all duration-200 flex items-center justify-center gap-1.5;
+  background: rgba(148, 163, 184, 0.08);
+  border: 1px solid var(--border-color);
+  color: var(--text-secondary);
+}
+
+.btn-clean-secondary:hover {
+  background: rgba(148, 163, 184, 0.15);
+  color: var(--text-primary);
 }
