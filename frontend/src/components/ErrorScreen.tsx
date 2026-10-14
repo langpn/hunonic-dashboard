@@ -7,19 +7,25 @@ interface ErrorScreenProps {
 
 export function ErrorScreen({ message, onRetry }: ErrorScreenProps) {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-      <div className="max-w-md w-full text-center">
-        <div className="w-16 h-16 bg-red-100 rounded-2xl flex items-center justify-center mx-auto mb-6">
-          <AlertTriangle className="w-8 h-8 text-red-600" />
+    <div className="min-h-screen flex items-center justify-center bg-[#04070d] px-4">
+      <div className="max-w-md w-full mystic-card p-8 text-center space-y-6 glow-border-rose">
+        <div className="w-16 h-16 bg-rose-500/10 border border-rose-500/30 rounded-2xl flex items-center justify-center mx-auto text-rose-400 shadow-[0_0_30px_rgba(244,63,94,0.3)]">
+          <AlertTriangle className="w-8 h-8" />
         </div>
-        <h2 className="text-2xl font-bold text-gray-900 mb-2">Có lỗi xảy ra</h2>
-        <p className="text-gray-500 mb-6">{message}</p>
+
+        <div>
+          <h2 className="text-xl font-bold text-white tracking-tight">Lỗi Kết Nối Máy Chủ</h2>
+          <p className="text-xs text-slate-400 mt-2 font-mono break-words leading-relaxed">
+            {message}
+          </p>
+        </div>
+
         <button
           onClick={onRetry}
-          className="btn btn-primary w-full flex items-center justify-center gap-2"
+          className="btn-mystic w-full py-3 text-xs uppercase tracking-wider"
         >
           <RefreshCw className="w-4 h-4" />
-          Thử lại
+          Thử Kết Nối Lại
         </button>
       </div>
     </div>

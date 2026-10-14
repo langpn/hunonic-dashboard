@@ -1,9 +1,8 @@
 /**
- * Hunonic API Client
- * Reverse engineered from Hunonic iOS app & web app
+ * Hunonic API Client - Ultra Lean Edition
+ * Pure Native Fetch & Native Crypto (Zero External Dependencies)
  */
-import axios, { AxiosInstance } from 'axios';
-import CryptoJS from 'crypto-js';
+import crypto from 'node:crypto';
 
 export interface HunonicConfig {
   phone: string;
@@ -74,7 +73,7 @@ export interface ElectricityRate {
 }
 
 export interface GraphDataParams {
-  type: '1' | '2' | '3'; // 1=year, 2=month, 3=custom
+  type: '1' | '2' | '3'; // 1=hourly/year, 2=month, 3=year
   root_id: string;
   time_start: string; // YYYY-MM-DD
   time_end: string;   // YYYY-MM-DD
@@ -85,8 +84,8 @@ export interface GraphDataParams {
 export interface GraphDataPoint {
   label: string;      // YYYY-MM-DD
   value: number;      // kWh
-  value_2: number;
-  solar: number;
+  value_2?: number;
+  solar?: number;
 }
 
 export interface GraphDataResponse {
@@ -106,75 +105,92 @@ export interface GraphDataResponse {
 }
 
 export class HunonicApiClient {
-  private client: AxiosInstance;
   private token: string | null = null;
   private tokenExpiry: number = 0;
   private config: HunonicConfig;
+  private baseUrl: string;
 
   constructor(config: HunonicConfig) {
-    this.config = {
-      ...config,
-      baseUrl: config.baseUrl || 'https://web.hunonic.com/api/api',
-    };
-
-    this.client = axios.create({
-      baseURL: this.config.baseUrl,
-      timeout: 30000,
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      withCredentials: true,
-    });
-
-    // CRITICAL: Request interceptor must NOT intercept /auth/login to avoid infinite recursion & OOM!
-    this.client.interceptors.request.use(async (request) => {
-      if (request.url && request.url.includes('/auth/login')) {
-        return request;
-      }
-      const token = await this.getValidToken();
-      if (token) {
-        request.headers.Authorization = `Bearer ${token}`;
-      }
-      return request;
-    });
+    this.config = config;
+    this.baseUrl = config.baseUrl || 'https://web.hunonic.com/api/api';
   }
 
   /**
-   * MD5 hash password (required by Hunonic API)
+   * Native C++ MD5 Hash for maximum speed
    */
   private md5(text: string): string {
-    return CryptoJS.MD5(text).toString();
+    return crypto.createHash('md5').update(text).digest('hex');
   }
 
   /**
-   * Helper to normalize Vietnamese phone number: +84 -> 0
+   * Phone normalization: +84 -> 0
    */
   private formatPhone(phone: string): string {
     const trimmed = phone.trim().replace(/\s+/g, '');
-    if (trimmed.startsWith('+84')) {
-      return '0' + trimmed.slice(3);
-    }
-    if (trimmed.startsWith('84') && trimmed.length === 11) {
-      return '0' + trimmed.slice(2);
-    }
+    if (trimmed.startsWith('+84')) return '0' + trimmed.slice(3);
+    if (trimmed.startsWith('84') && trimmed.length === 11) return '0' + trimmed.slice(2);
     return trimmed;
   }
 
   /**
-   * Login and get JWT token
+   * Native Fetch wrapper with timeout & automatic JSON handling
+   */
+  private async request<T>(endpoint: string, options: RequestInit = {}): Promise<T> {
+    const isLogin = endpoint.includes('/auth/login');
+    const headers = new Headers(options.headers || {});
+    headers.set('Content-Type', 'application/json');
+    headers.set('Accept', 'application/json');
+
+    if (!isLogin) {
+      const token = await this.getValidToken();
+      if (token) {
+        headers.set('Authorization', `Bearer ${token}`);
+      }
+    }
+
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 25000);
+
+    try {
+      const url = `${this.baseUrl}${endpoint}`;
+      const res = await fetch(url, {
+        ...options,
+        headers,
+        signal: controller.signal,
+      });
+
+      if (!res.ok && res.status >= 500) {
+        throw new Error(`Hunonic Cloud Server error (HTTP ${res.status})`);
+      }
+
+      const text = await res.text();
+      try {
+        return JSON.parse(text) as T;
+      } catch {
+        throw new Error(`Invalid response format from Hunonic API: ${text.slice(0, 100)}`);
+      }
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  /**
+   * Login and cache token
    */
   async login(): Promise<string> {
-    const passwordHash = this.md5(this.config.password);
     const phone = this.formatPhone(this.config.phone);
+    const passwordHash = this.md5(this.config.password);
 
-    const response = await this.client.post<LoginResponse>('/auth/login', {
-      phone: phone,
-      password: passwordHash,
+    const body = await this.request<LoginResponse>('/auth/login', {
+      method: 'POST',
+      body: JSON.stringify({
+        phone,
+        password: passwordHash,
+      }),
     });
 
-    const body = response.data;
     if (!body.status || !body.data?.token) {
-      throw new Error(`Login failed: ${body.message || 'Unknown error'}`);
+      throw new Error(`Login failed: ${body.message || 'Unknown credential error'}`);
     }
 
     this.token = body.data.token;
@@ -183,7 +199,7 @@ export class HunonicApiClient {
   }
 
   /**
-   * Get valid token (auto-refresh if expired)
+   * Get valid token with auto-refresh
    */
   async getValidToken(): Promise<string> {
     if (!this.token || Date.now() >= this.tokenExpiry - 60000) {
@@ -193,27 +209,27 @@ export class HunonicApiClient {
   }
 
   /**
-   * Get list of homes
+   * Get all homes
    */
   async getHomes(): Promise<Home[]> {
-    const response = await this.client.get('/hun-api/home/list-home');
-    if (!response.data.status) {
-      throw new Error(`Get homes failed: ${response.data.message}`);
-    }
-    return response.data.data;
+    const res = await this.request<{ status: boolean; message: string; data: Home[] }>('/hun-api/home/list-home', {
+      method: 'GET',
+    });
+    if (!res.status) throw new Error(res.message || 'Failed to fetch homes');
+    return res.data || [];
   }
 
   /**
    * Get devices in a home
    */
   async getDevicesByHome(homeId: string = '966357'): Promise<Device[]> {
-    const response = await this.client.get('/hun-api/device/listDeviceByHome', {
-      params: { home_id: homeId },
-    });
-    if (!response.data.status) {
-      throw new Error(`Get devices failed: ${response.data.message}`);
-    }
-    const rawData = response.data.data;
+    const res = await this.request<{ status: boolean; message: string; data: any }>(
+      `/hun-api/device/listDeviceByHome?home_id=${encodeURIComponent(homeId)}`,
+      { method: 'GET' }
+    );
+    if (!res.status) throw new Error(res.message || 'Failed to fetch devices');
+    
+    const rawData = res.data;
     const homesList = Array.isArray(rawData) ? rawData : (rawData ? [rawData] : []);
     const devices: Device[] = [];
     for (const h of homesList) {
@@ -229,31 +245,31 @@ export class HunonicApiClient {
   }
 
   /**
-   * Get electricity rate for a device
+   * Get electricity rate
    */
   async getElectricityRate(rootId: string): Promise<ElectricityRate[]> {
-    const response = await this.client.get('/hun-api/atmwifi/get-electricity-rate', {
-      params: { root_id: rootId },
-    });
-    if (!response.data.status) {
-      throw new Error(`Get electricity rate failed: ${response.data.message}`);
-    }
-    return response.data.data;
+    const res = await this.request<{ status: boolean; message: string; data: ElectricityRate[] }>(
+      `/hun-api/atmwifi/get-electricity-rate?root_id=${encodeURIComponent(rootId)}`,
+      { method: 'GET' }
+    );
+    if (!res.status) throw new Error(res.message || 'Failed to fetch rate');
+    return res.data || [];
   }
 
   /**
-   * Get graph data (consumption history) for elmeter/atmwifi
+   * Get graph data (daily/monthly)
    */
   async getGraphData(params: GraphDataParams): Promise<GraphDataResponse['data']> {
-    const response = await this.client.post('/hun-api/atmwifi/getDataGraph', params);
-    if (!response.data.status) {
-      throw new Error(`Get graph data failed: ${response.data.message}`);
-    }
-    return response.data.data;
+    const res = await this.request<GraphDataResponse>('/hun-api/atmwifi/getDataGraph', {
+      method: 'POST',
+      body: JSON.stringify(params),
+    });
+    if (!res.status) throw new Error(res.message || 'Failed to fetch graph data');
+    return res.data;
   }
 
   /**
-   * Get month consumption for a device
+   * Get current month daily consumption
    */
   async getMonthConsumption(rootId: string, targetYear?: number, targetMonth?: number): Promise<GraphDataResponse['data']> {
     const now = new Date();
@@ -274,31 +290,22 @@ export class HunonicApiClient {
   }
 
   /**
-   * Get yearly consumption for a device
+   * Update device settings / thresholds
    */
-  async getYearlyConsumption(rootId: string, year?: number): Promise<GraphDataResponse['data']> {
-    const targetYear = year || new Date().getFullYear();
-
-    return this.getGraphData({
-      type: '1',
-      root_id: rootId,
-      time_start: `${targetYear}-01-01`,
-      time_end: `${targetYear}-12-31`,
-      year: targetYear.toString(),
+  async updateThresholds(data: Record<string, any>): Promise<boolean> {
+    const res = await this.request<{ status: boolean; message: string }>('/hun-api/atmwifi/update-atm-info', {
+      method: 'POST',
+      body: JSON.stringify(data),
     });
+    return !!res.status;
   }
 }
 
-/**
- * Create client instance from environment variables
- */
 export function createHunonicClient(): HunonicApiClient {
   const phone = process.env.HUNONIC_PHONE;
   const password = process.env.HUNONIC_PASSWORD;
-
   if (!phone || !password) {
     throw new Error('HUNONIC_PHONE and HUNONIC_PASSWORD must be set in environment');
   }
-
   return new HunonicApiClient({ phone, password });
 }

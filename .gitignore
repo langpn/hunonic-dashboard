@@ -10,6 +10,11 @@ build/
 frontend/dist/
 *.local
 
+# Runtime Data
+data/
+*.db
+*.sqlite
+
 # Environment files
 .env
 .env.local

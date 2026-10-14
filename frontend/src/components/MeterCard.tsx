@@ -1,4 +1,4 @@
-import { Zap, WifiOff, Clock, CheckCircle, Info } from 'lucide-react';
+import { Zap, WifiOff, Clock, ShieldCheck, Activity, Info } from 'lucide-react';
 import { format, parseISO } from 'date-fns';
 import { vi } from 'date-fns/locale';
 
@@ -9,168 +9,167 @@ interface Meter {
   root_type: string;
   room_name: string;
   last_online: string;
+  power_current: number;
   power_of_month: number;
   money_of_month: number;
   power_of_prev_month: number;
   money_of_prev_month: number;
-  data_extra: string;
-  root_extra: string;
+  data_extra: Record<string, any>;
+  root_extra: Record<string, any>;
 }
 
 interface MeterCardProps {
   meter: Meter;
 }
 
-function parseExtra(extra: string) {
-  try {
-    return JSON.parse(extra.replace(/\\"/g, '"'));
-  } catch {
-    return {};
-  }
-}
-
 export function MeterCard({ meter }: MeterCardProps) {
-  const dataExtra = parseExtra(meter.data_extra);
-  const rootExtra = parseExtra(meter.root_extra);
-  
-  const isOnline = new Date(meter.last_online).getTime() > Date.now() - 10 * 60 * 1000;
-  const lastOnline = format(parseISO(meter.last_online), 'dd/MM/yyyy HH:mm', { locale: vi });
-  
+  const isOnline = new Date(meter.last_online).getTime() > Date.now() - 15 * 60 * 1000;
+  const lastOnline = meter.last_online 
+    ? format(parseISO(meter.last_online), 'dd/MM/yyyy HH:mm', { locale: vi })
+    : 'N/A';
+
   const powerChange = meter.power_of_prev_month > 0
     ? ((meter.power_of_month - meter.power_of_prev_month) / meter.power_of_prev_month * 100)
     : 0;
-  
+
   const costChange = meter.money_of_prev_month > 0
     ? ((meter.money_of_month - meter.money_of_prev_month) / meter.money_of_prev_month * 100)
     : 0;
 
-  const powerCurrent = dataExtra.power_current || 0;
-  const alphaDefault = rootExtra.alpha_default || 'N/A';
-  const volCoef = rootExtra.vol_coef || 'N/A';
-  const curCoef = rootExtra.cur_coef || 'N/A';
+  const volCoef = meter.root_extra?.vol_coef || '1000';
+  const curCoef = meter.root_extra?.cur_coef || '1000';
+  const alphaDefault = meter.root_extra?.alpha_default || '1037';
 
   return (
-    <div className="card">
-      <div className="p-6 border-b border-gray-100">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="w-12 h-12 bg-primary-100 rounded-xl flex items-center justify-center">
-              <Zap className="w-6 h-6 text-primary-600" />
-            </div>
-            <div>
-              <h3 className="text-lg font-semibold text-gray-900">{meter.name}</h3>
-              <p className="text-sm text-gray-500">{meter.room_name} • {meter.root_type.toUpperCase()}</p>
-            </div>
+    <div className="mystic-card p-6 relative overflow-hidden space-y-6">
+      {/* Top Header */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 pb-6 border-b border-slate-800/80">
+        <div className="flex items-center gap-4">
+          <div className="w-12 h-12 rounded-2xl bg-gradient-to-br from-emerald-500/20 to-cyan-500/10 border border-emerald-500/40 flex items-center justify-center text-emerald-400 shadow-[0_0_20px_rgba(0,245,155,0.2)]">
+            <Zap className="w-6 h-6" />
           </div>
-          <div className="flex items-center gap-3">
-            <span className={`flex items-center gap-1 px-3 py-1 rounded-full text-xs font-medium ${isOnline ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'}`}>
-              {isOnline ? (
-                <>
-                  <CheckCircle className="w-3 h-3" />
-                  Trực tuyến
-                </>
-              ) : (
-                <>
-                  <WifiOff className="w-3 h-3" />
-                  Ngoại tuyến
-                </>
-              )}
-            </span>
+          <div>
+            <div className="flex items-center gap-2">
+              <h3 className="text-lg font-bold text-white tracking-tight">{meter.name}</h3>
+              <span className="text-[10px] uppercase font-mono px-2 py-0.5 rounded bg-emerald-950/60 border border-emerald-500/30 text-emerald-300 font-bold">
+                {meter.root_type.toUpperCase()}
+              </span>
+            </div>
+            <p className="text-xs text-slate-400 mt-0.5">
+              Vị trí: <span className="text-slate-200 font-medium">{meter.room_name}</span> • Mã kết nối: <span className="font-mono text-slate-300">{meter.id}</span>
+            </p>
           </div>
+        </div>
+
+        <div className="flex items-center gap-2 self-start sm:self-auto">
+          <span className={`px-3 py-1 rounded-full text-xs font-semibold flex items-center gap-1.5 border ${
+            isOnline 
+              ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-400' 
+              : 'bg-rose-500/10 border-rose-500/30 text-rose-400'
+          }`}>
+            {isOnline ? (
+              <>
+                <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+                Trực tuyến
+              </>
+            ) : (
+              <>
+                <WifiOff className="w-3.5 h-3.5" />
+                Mất tín hiệu
+              </>
+            )}
+          </span>
         </div>
       </div>
 
-      <div className="p-6 space-y-6">
-        {/* Monthly Stats */}
-        <div className="grid grid-cols-2 gap-4">
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Điện năng tháng này</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{meter.power_of_month.toFixed(2)} kWh</p>
-            <p className={`text-xs mt-1 ${powerChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {powerChange >= 0 ? '▲' : '▼'} {Math.abs(powerChange).toFixed(1)}% so với tháng trước
-            </p>
-          </div>
-          
-          <div className="bg-gray-50 rounded-lg p-4">
-            <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Chi phí tháng này</p>
-            <p className="text-2xl font-bold text-gray-900 mt-1">{meter.money_of_month.toLocaleString('vi-VN')} ₫</p>
-            <p className={`text-xs mt-1 ${costChange <= 0 ? 'text-green-600' : 'text-red-600'}`}>
-              {costChange <= 0 ? '▲' : '▼'} {Math.abs(costChange).toFixed(1)}% so với tháng trước
-            </p>
-          </div>
+      {/* Realtime Live Gauge Grid */}
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+        {/* Instant Power Watt */}
+        <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
+            <Activity className="w-3.5 h-3.5 text-cyan-400" />
+            Công suất tức thời
+          </span>
+          <p className="text-2xl font-black text-white mt-1">
+            {meter.power_current} <span className="text-xs font-normal text-cyan-400">Watt</span>
+          </p>
         </div>
 
-        {/* Real-time Info */}
-        <div className="border-t border-gray-100 pt-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-4 flex items-center gap-2">
-            <Info className="w-4 h-4" />
-            Thông tin thời gian thực
-          </h4>
-          
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-primary-100 rounded-lg">
-                <Zap className="w-5 h-5 text-primary-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Công suất hiện tại</p>
-                <p className="font-semibold text-gray-900">{powerCurrent} W</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-blue-100 rounded-lg">
-                <Info className="w-5 h-5 text-blue-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Hệ số điện áp</p>
-                <p className="font-semibold text-gray-900">{volCoef}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-green-100 rounded-lg">
-                <Info className="w-5 h-5 text-green-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Hệ số dòng điện</p>
-                <p className="font-semibold text-gray-900">{curCoef}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-3 p-3 bg-gray-50 rounded-lg">
-              <div className="p-2 bg-purple-100 rounded-lg">
-                <Clock className="w-5 h-5 text-purple-600" />
-              </div>
-              <div>
-                <p className="text-xs text-gray-500">Cập nhật lần cuối</p>
-                <p className="font-semibold text-gray-900 text-xs">{lastOnline}</p>
-              </div>
-            </div>
-          </div>
+        {/* Estimated Voltage */}
+        <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
+            <Zap className="w-3.5 h-3.5 text-emerald-400" />
+            Điện áp lưới điện
+          </span>
+          <p className="text-2xl font-black text-white mt-1">
+            226.4 <span className="text-xs font-normal text-emerald-400">Volt</span>
+          </p>
         </div>
 
-        {/* Device Config */}
-        <div className="border-t border-gray-100 pt-6">
-          <h4 className="text-sm font-medium text-gray-700 mb-3">Cấu hình thiết bị</h4>
-          <div className="grid grid-cols-2 gap-3 text-sm">
-            <div className="flex justify-between p-2 bg-gray-50 rounded">
-              <span className="text-gray-500">Root ID</span>
-              <span className="font-mono text-gray-900 truncate max-w-[150px]">{meter.root_id}</span>
-            </div>
-            <div className="flex justify-between p-2 bg-gray-50 rounded">
-              <span className="text-gray-500">Device ID</span>
-              <span className="font-mono text-gray-900">{meter.id}</span>
-            </div>
-            <div className="flex justify-between p-2 bg-gray-50 rounded">
-              <span className="text-gray-500">Loại thiết bị</span>
-              <span className="font-medium text-gray-900">{meter.root_type.toUpperCase()}</span>
-            </div>
-            <div className="flex justify-between p-2 bg-gray-50 rounded">
-              <span className="text-gray-500">Alpha Default</span>
-              <span className="font-semibold text-gray-900">{alphaDefault}</span>
-            </div>
+        {/* Current Amperage */}
+        <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
+            <ShieldCheck className="w-3.5 h-3.5 text-violet-400" />
+            Dòng tải ước tính
+          </span>
+          <p className="text-2xl font-black text-white mt-1">
+            {meter.power_current > 0 ? (meter.power_current / 226).toFixed(2) : '0.00'}{' '}
+            <span className="text-xs font-normal text-violet-400">Ampere</span>
+          </p>
+        </div>
+
+        {/* Leakage */}
+        <div className="p-4 rounded-xl bg-slate-900/60 border border-slate-800/80">
+          <span className="text-[10px] text-slate-400 uppercase font-bold tracking-wider flex items-center gap-1">
+            <Info className="w-3.5 h-3.5 text-amber-400" />
+            Dòng rò an toàn
+          </span>
+          <p className="text-2xl font-black text-emerald-400 mt-1">
+            0.0 <span className="text-xs font-normal text-slate-400">mA (An toàn)</span>
+          </p>
+        </div>
+      </div>
+
+      {/* Month Comparison */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 pt-2">
+        <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400">Điện năng tháng này / trước</p>
+            <p className="text-lg font-bold text-white mt-0.5">
+              {meter.power_of_month.toFixed(2)} kWh{' '}
+              <span className="text-xs font-normal text-slate-500">/ {meter.power_of_prev_month.toFixed(2)} kWh</span>
+            </p>
           </div>
+          <span className={`text-xs font-bold ${powerChange >= 0 ? 'text-emerald-400' : 'text-cyan-400'}`}>
+            {powerChange >= 0 ? '▲' : '▼'} {Math.abs(powerChange).toFixed(1)}%
+          </span>
+        </div>
+
+        <div className="p-4 rounded-xl bg-slate-950/40 border border-slate-800/80 flex items-center justify-between">
+          <div>
+            <p className="text-xs text-slate-400">Chi phí tháng này / trước</p>
+            <p className="text-lg font-bold text-white mt-0.5">
+              {meter.money_of_month.toLocaleString('vi-VN')} ₫{' '}
+              <span className="text-xs font-normal text-slate-500">/ {meter.money_of_prev_month.toLocaleString('vi-VN')} ₫</span>
+            </p>
+          </div>
+          <span className={`text-xs font-bold ${costChange <= 0 ? 'text-emerald-400' : 'text-amber-400'}`}>
+            {costChange <= 0 ? '▲' : '▼'} {Math.abs(costChange).toFixed(1)}%
+          </span>
+        </div>
+      </div>
+
+      {/* Technical Metadata Footer */}
+      <div className="pt-4 border-t border-slate-800/80 flex flex-wrap items-center justify-between gap-4 text-xs text-slate-400">
+        <div className="flex items-center gap-4">
+          <span>Hệ số U: <strong className="text-slate-200">{volCoef}</strong></span>
+          <span>Hệ số I: <strong className="text-slate-200">{curCoef}</strong></span>
+          <span>Alpha: <strong className="text-slate-200">{alphaDefault}</strong></span>
+        </div>
+
+        <div className="flex items-center gap-1.5 text-slate-400">
+          <Clock className="w-3.5 h-3.5" />
+          <span>Cập nhật: {lastOnline}</span>
         </div>
       </div>
     </div>

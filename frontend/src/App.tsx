@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { Dashboard } from './components/Dashboard';
 import { LoadingScreen } from './components/LoadingScreen';
 import { ErrorScreen } from './components/ErrorScreen';
+import type { HourlyPoint } from './components/HourlyChart';
 
 export interface SummaryData {
   home: {
@@ -21,13 +22,25 @@ export interface SummaryData {
     money_of_month: number;
     power_of_prev_month: number;
     money_of_prev_month: number;
-    data_extra: string;
-    root_extra: string;
+    data_extra: Record<string, any>;
+    root_extra: Record<string, any>;
+  }>;
+  allDevices?: Array<{
+    id: string;
+    name: string;
+    root_id: string;
+    root_type: string;
+    room_name: string;
+    state: string;
+    status: number;
+    last_online: string;
   }>;
   today: {
+    date: string;
     kwh: number;
     power_current_w: number;
     cost_estimated: number;
+    hourly?: HourlyPoint[];
   };
   currentMonth: {
     total_power: number;
@@ -37,13 +50,25 @@ export interface SummaryData {
     daily_data: Array<{
       date: string;
       kwh: number;
-      solar: number;
+      solar?: number;
     }>;
   } | null;
   electricityRate: {
     price: string;
     group_name: string;
   } | null;
+  storage_diagnostics?: {
+    total_samples: number;
+    retention_policy: string;
+    oldest_date: string;
+    newest_date: string;
+    dates_recorded_count: number;
+    storage_file_size_kb: number;
+    memory: {
+      heap_used_mb: string;
+      rss_mb: string;
+    };
+  };
 }
 
 function App() {
