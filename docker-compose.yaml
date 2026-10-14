@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  hunonic-dashboard:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: hunonic-dashboard
+    restart: unless-stopped
+    environment:
+      - NODE_ENV=production
+      - PORT=3000
+      - HUNONIC_PHONE=${HUNONIC_PHONE}
+      - HUNONIC_PASSWORD=${HUNONIC_PASSWORD}
+      - CORS_ORIGIN=${CORS_ORIGIN:-*}
+    ports:
+      - "${PORT:-3000}:3000"
+    volumes:
+      - hunonic_data:/app/data
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+volumes:
+  hunonic_data:
+    driver: local
