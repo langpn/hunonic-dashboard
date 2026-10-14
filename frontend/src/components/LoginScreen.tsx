@@ -10,7 +10,7 @@ interface LoginScreenProps {
 
 export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme }: LoginScreenProps) {
   const [phone, setPhone] = useState('0353700780');
-  const [password, setPassword] = useState('');
+  const [password, setPassword] = useState('La526488!');
   const [remember, setRemember] = useState(true);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
