@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Clock, Zap, TrendingUp, ChevronLeft, ChevronRight, Loader2 } from 'lucide-react';
+import { Clock, Zap, TrendingUp, ChevronLeft, ChevronRight, Loader2, Cloud } from 'lucide-react';
 
 export interface HourlyPoint {
   hour: number;        // 0 - 23
@@ -23,15 +23,13 @@ export function HourlyChart({
 }: HourlyChartProps) {
   const [date, setDate] = useState(initialDate);
   const [data, setData] = useState<HourlyPoint[]>(initialData);
+  const [dayTotalKwh, setDayTotalKwh] = useState(0);
+  const [isFromCloud, setIsFromCloud] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hoveredHour, setHoveredHour] = useState<HourlyPoint | null>(null);
 
   useEffect(() => {
-    if (initialData.length > 0 && date === initialDate) {
-      setData(initialData);
-    } else {
-      fetchDayData(date);
-    }
+    fetchDayData(date);
   }, [date]);
 
   const fetchDayData = async (targetDate: string) => {
@@ -44,6 +42,8 @@ export function HourlyChart({
       const json = await res.json();
       if (json.success && json.data) {
         setData(json.data.hourly || []);
+        setDayTotalKwh(json.data.total_kwh || 0);
+        setIsFromCloud(!!json.data.is_from_cloud);
       }
     } catch (e) {
       console.warn('Failed to fetch day hourly data:', e);
@@ -71,7 +71,10 @@ export function HourlyChart({
   });
 
   const maxPowerW = Math.max(...hoursList.map(d => d.avg_power_w), 100);
-  const totalDayKwh = parseFloat(hoursList.reduce((sum, d) => sum + d.kwh, 0).toFixed(2));
+  const totalDayKwh = dayTotalKwh > 0 
+    ? dayTotalKwh 
+    : parseFloat(hoursList.reduce((sum, d) => sum + d.kwh, 0).toFixed(2));
+
   const peakPoint = hoursList.reduce((max, d) => (d.avg_power_w > max.avg_power_w ? d : max), hoursList[0]);
   const activePoint = hoveredHour || peakPoint;
 
@@ -83,6 +86,7 @@ export function HourlyChart({
           <button
             onClick={handlePrevDay}
             className="p-1 rounded-full text-[#00B33D] dark:text-[#10B981] hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Ngày trước"
           >
             <ChevronLeft className="w-5 h-5" />
           </button>
@@ -92,6 +96,7 @@ export function HourlyChart({
           <button
             onClick={handleNextDay}
             className="p-1 rounded-full text-[#00B33D] dark:text-[#10B981] hover:bg-slate-100 dark:hover:bg-slate-800"
+            title="Ngày sau"
           >
             <ChevronRight className="w-5 h-5" />
           </button>
@@ -99,7 +104,7 @@ export function HourlyChart({
 
         <div className="text-right">
           <span className="text-xs text-slate-500 dark:text-slate-400">Tổng cả ngày: </span>
-          <strong className="text-sm font-bold text-slate-900 dark:text-white">{totalDayKwh} kWh</strong>
+          <strong className="text-sm font-bold text-slate-900 dark:text-white">{totalDayKwh.toFixed(2)} kWh</strong>
           <span className="text-xs text-[#EF4444] font-semibold ml-2">
             (~{Math.round(totalDayKwh * ratePrice).toLocaleString('vi-VN')} ₫)
           </span>
@@ -112,6 +117,16 @@ export function HourlyChart({
         </div>
       ) : (
         <>
+          {/* Cloud vs Local Note Banner if historical day */}
+          {isFromCloud && (
+            <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+              <Cloud className="w-4 h-4 text-emerald-500 flex-shrink-0" />
+              <span>
+                Tổng lượng điện ngày <strong className="text-slate-800 dark:text-white">{date}</strong> được đồng bộ trực tiếp từ Cloud Hunonic: <strong className="text-[#00B33D] dark:text-[#10B981]">{totalDayKwh.toFixed(2)} kWh</strong> (~{Math.round(totalDayKwh * ratePrice).toLocaleString('vi-VN')} ₫).
+              </span>
+            </div>
+          )}
+
           {/* Telemetry Indicator Row */}
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 p-3.5 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 transition-colors">
             <div className="flex items-center gap-3">

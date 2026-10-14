@@ -74,7 +74,7 @@ export interface ElectricityRate {
 }
 
 export interface GraphDataParams {
-  type: '1' | '2' | '3'; // 1=hourly/year, 2=month, 3=year
+  type: '0' | '1' | '2' | '3'; // 0=single day, 1=hourly/year, 2=month/range, 3=year 12-months
   root_id: string;
   time_start: string; // YYYY-MM-DD
   time_end: string;   // YYYY-MM-DD

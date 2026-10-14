@@ -289,7 +289,38 @@ app.get('/api/dashboard/history', async (c) => {
     if (type === 'day') {
       const date = c.req.query('date') || new Date().toISOString().slice(0, 10);
       const hourly = hourlyStorage.getHourlyForDate(date, meter.root_id);
-      return c.json({ success: true, data: { date, hourly } });
+      const localTotalKwh = parseFloat(hourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
+      const hasLocalData = hourly.some(r => r.kwh > 0 || r.avg_power_w > 0);
+
+      // Query Hunonic Cloud API for the exact day's kWh (works for ALL past days!)
+      let cloudTotalKwh = 0;
+      try {
+        const cloudRes = await client.getGraphData({
+          type: '0',
+          root_id: meter.root_id,
+          time_start: date,
+          time_end: date,
+          year: date.slice(0, 4),
+        });
+        cloudTotalKwh = cloudRes.total_power || (cloudRes.graph_data?.[0]?.value ?? 0);
+      } catch (e) {
+        console.warn(`Failed to fetch cloud day data for ${date}:`, e);
+      }
+
+      const finalTotalKwh = hasLocalData ? localTotalKwh : cloudTotalKwh;
+      const peakRecord = hourly.reduce((max, r) => (r.avg_power_w > max.avg_power_w ? r : max), hourly[0] || { hour: 0, avg_power_w: 0 });
+
+      return c.json({
+        success: true,
+        data: {
+          date,
+          total_kwh: finalTotalKwh,
+          peak_hour: peakRecord ? peakRecord.hour : 0,
+          peak_power_w: peakRecord ? peakRecord.avg_power_w : 0,
+          is_from_cloud: !hasLocalData && cloudTotalKwh > 0,
+          hourly,
+        },
+      });
     }
 
     return c.json({ success: false, error: 'Loại truy vấn không hợp lệ' }, 400);
