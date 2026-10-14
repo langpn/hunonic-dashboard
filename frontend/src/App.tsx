@@ -179,6 +179,7 @@ function App() {
       isDark={isDark}
       onToggleTheme={toggleTheme}
       userPhone={phone}
+      token={token}
     />
   );
 }

@@ -24,7 +24,7 @@ app.use('*', cors({
 }));
 
 // In-memory cache for dashboard summary (TTL: 30 seconds)
-let summaryCache: { data: any; timestamp: number } | null = null;
+let summaryCache: { data: any; timestamp: number; key?: string } | null = null;
 const CACHE_TTL_MS = 30 * 1000;
 
 // Health check
@@ -92,7 +92,13 @@ app.get('/api/dashboard/summary', async (c) => {
   try {
     const now = Date.now();
     const forceRefresh = c.req.query('refresh') === 'true';
-    if (!forceRefresh && summaryCache && (now - summaryCache.timestamp < CACHE_TTL_MS)) {
+
+    // Parse requested year and month (fallback to current date)
+    const reqYear = c.req.query('year') ? parseInt(c.req.query('year')!) : new Date().getFullYear();
+    const reqMonth = c.req.query('month') ? parseInt(c.req.query('month')!) : (new Date().getMonth() + 1);
+    const cacheKey = `${reqYear}-${reqMonth}`;
+
+    if (!forceRefresh && summaryCache && summaryCache.key === cacheKey && (now - summaryCache.timestamp < CACHE_TTL_MS)) {
       return c.json({ success: true, data: summaryCache.data, cached: true });
     }
 
@@ -125,9 +131,9 @@ app.get('/api/dashboard/summary', async (c) => {
       }
 
       try {
-        monthData = await client.getMonthConsumption(meter.root_id);
+        monthData = await client.getMonthConsumption(meter.root_id, reqYear, reqMonth);
       } catch (e) {
-        console.warn('Failed to fetch month consumption data:', e);
+        console.warn(`Failed to fetch month consumption data for ${reqMonth}/${reqYear}:`, e);
       }
 
       try {
@@ -235,9 +241,58 @@ app.get('/api/dashboard/summary', async (c) => {
     summaryCache = {
       data: responseData,
       timestamp: now,
+      key: cacheKey,
     };
 
     return c.json({ success: true, data: responseData });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+// ==============================================================================
+// 1.1 HISTORY DATA (Theo Năm / Tuỳ Chỉnh / Theo Ngày)
+// ==============================================================================
+
+app.get('/api/dashboard/history', async (c) => {
+  try {
+    const type = c.req.query('type') || 'year';
+    const client = getClient(c);
+    const devices = await client.getDevicesByHome();
+    const meter = devices.find(d => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
+    if (!meter) {
+      return c.json({ success: false, error: 'Không tìm thấy công tơ điện!' }, 404);
+    }
+
+    if (type === 'year') {
+      const year = c.req.query('year') ? parseInt(c.req.query('year')!) : new Date().getFullYear();
+      const yearData = await client.getYearlyConsumption(meter.root_id, year);
+      return c.json({ success: true, data: yearData });
+    }
+
+    if (type === 'custom') {
+      const start = c.req.query('start');
+      const end = c.req.query('end');
+      if (!start || !end) {
+        return c.json({ success: false, error: 'Cần ngày bắt đầu (start) và ngày kết thúc (end)!' }, 400);
+      }
+      const customData = await client.getGraphData({
+        type: '2',
+        root_id: meter.root_id,
+        time_start: start,
+        time_end: end,
+        year: start.slice(0, 4),
+      });
+      return c.json({ success: true, data: customData });
+    }
+
+    if (type === 'day') {
+      const date = c.req.query('date') || new Date().toISOString().slice(0, 10);
+      const hourly = hourlyStorage.getHourlyForDate(date, meter.root_id);
+      return c.json({ success: true, data: { date, hourly } });
+    }
+
+    return c.json({ success: false, error: 'Loại truy vấn không hợp lệ' }, 400);
   } catch (error) {
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }

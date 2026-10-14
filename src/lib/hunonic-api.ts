@@ -336,6 +336,21 @@ export class HunonicApiClient {
   }
 
   /**
+   * Get yearly consumption for a device (12 months breakdown)
+   */
+  async getYearlyConsumption(rootId: string, year?: number): Promise<GraphDataResponse['data']> {
+    const targetYear = year || new Date().getFullYear();
+
+    return this.getGraphData({
+      type: '3', // Type 3 returns all 12 months in Hunonic cloud
+      root_id: rootId,
+      time_start: `${targetYear}-01-01`,
+      time_end: `${targetYear}-12-31`,
+      year: targetYear.toString(),
+    });
+  }
+
+  /**
    * Update device settings / thresholds
    */
   async updateThresholds(data: Record<string, any>): Promise<boolean> {
