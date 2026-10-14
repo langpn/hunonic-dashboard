@@ -144,30 +144,30 @@ export function Dashboard({
       {/* Top Header Bar */}
       <header className="sticky top-0 z-30 bg-white/90 dark:bg-[#161B22]/90 backdrop-blur-md border-b border-slate-200/80 dark:border-[#30363D] transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16 sm:h-20">
+          <div className="flex items-center justify-between h-16 sm:h-20 gap-2">
             {/* Title & Device */}
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-[#00B33D] dark:text-[#10B981]">
+            <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
+              <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-[#00B33D] dark:text-[#10B981] flex-shrink-0">
                 <Wind className="w-5 h-5" />
               </div>
 
-              <div>
-                <div className="flex items-center gap-2">
-                  <h1 className="text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight uppercase">
+              <div className="min-w-0">
+                <div className="flex items-center gap-1.5 sm:gap-2">
+                  <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight uppercase truncate">
                     {meter?.name || 'BỘ KIỂM SOÁT ĐIỆN NĂNG'}
                   </h1>
-                  <span className="hidden sm:inline-block px-2.5 py-0.5 rounded-full text-xs font-semibold bg-emerald-500/10 text-[#00B33D] dark:text-[#10B981] border border-emerald-500/30">
+                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/10 text-[#00B33D] dark:text-[#10B981] border border-emerald-500/30 flex-shrink-0">
                     {meter?.root_type?.toUpperCase() || 'EKMETER'}
                   </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
+                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
                   {home.name} • {meter?.room_name || 'Điều hòa nhiệt độ'}
                 </p>
               </div>
             </div>
 
-            {/* Actions */}
-            <div className="flex items-center gap-2 sm:gap-3">
+            {/* Actions: Compact on Mobile */}
+            <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
               <div className="hidden lg:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#21262D] text-xs font-medium border border-slate-200 dark:border-[#30363D]">
                 <span className={`w-2 h-2 rounded-full ${isOnline ? 'bg-[#00B33D] animate-pulse' : 'bg-slate-400'}`} />
                 <span>{isOnline ? 'Trực tuyến' : 'Ngoại tuyến'}</span>
@@ -175,27 +175,27 @@ export function Dashboard({
 
               <button
                 onClick={onToggleTheme}
-                className="btn-nordic"
+                className="btn-nordic p-2 sm:px-3 sm:py-1.5"
                 title={isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}
               >
                 {isDark ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4 text-slate-600" />}
-                <span className="hidden sm:inline">{isDark ? 'Giao diện Sáng' : 'Giao diện Tối'}</span>
+                <span className="hidden md:inline">{isDark ? 'Sáng' : 'Tối'}</span>
               </button>
 
               <button
                 onClick={onRefresh}
-                className="btn-nordic"
+                className="btn-nordic p-2 sm:px-3 sm:py-1.5"
                 title="Làm mới dữ liệu từ công tơ"
               >
                 <RefreshCw className="w-4 h-4 text-[#00B33D] dark:text-[#10B981]" />
-                <span className="hidden sm:inline">Làm mới</span>
+                <span className="hidden md:inline">Làm mới</span>
               </button>
 
               {/* Settings Dropdown */}
               <div className="relative">
                 <button
                   onClick={() => setShowSettings((v) => !v)}
-                  className="btn-nordic"
+                  className="btn-nordic p-2 sm:px-3 sm:py-1.5"
                   title="Cài đặt tài khoản"
                 >
                   <Settings className="w-4 h-4" />
@@ -230,7 +230,64 @@ export function Dashboard({
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6">
         {/* Navigation Tabs (Theo ngày | Theo tháng | Theo năm | Tuỳ chỉnh) */}
         <div className="studio-card p-3 sm:p-4">
-          <div className="flex items-center justify-between">
+          {/* Mobile Layout: Stacked Tabs & Month Selector */}
+          <div className="sm:hidden space-y-3">
+            {/* Row 1: 4 Equal Grid Tabs */}
+            <div className="grid grid-cols-4 gap-1 text-xs font-semibold text-slate-400 border-b border-slate-100 dark:border-slate-800 pb-2">
+              {[
+                { id: 'day', label: 'Theo ngày' },
+                { id: 'month', label: 'Theo tháng' },
+                { id: 'year', label: 'Theo năm' },
+                { id: 'custom', label: 'Tuỳ chỉnh' },
+              ].map((tab) => {
+                const isActive = periodTab === tab.id;
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setPeriodTab(tab.id as PeriodTab)}
+                    className={`py-1 text-center relative transition-all duration-150 ${
+                      isActive
+                        ? 'text-slate-900 dark:text-white font-bold'
+                        : 'hover:text-slate-600 dark:hover:text-slate-300'
+                    }`}
+                  >
+                    {tab.label}
+                    {isActive && (
+                      <span className="absolute -bottom-2 left-2 right-2 h-0.5 bg-slate-900 dark:bg-white rounded-full" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* Row 2: Centered Month Picker (< Tháng 10/2026 >) matching iPhone app */}
+            {periodTab === 'month' && (
+              <div className="flex items-center justify-center gap-5 pt-1">
+                <button
+                  onClick={handlePrevMonth}
+                  disabled={loadingMonth}
+                  className="p-1 rounded-full text-[#00B33D] dark:text-[#10B981] hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                  title="Tháng trước"
+                >
+                  <ChevronLeft className="w-5 h-5" />
+                </button>
+                <span className="text-sm font-bold text-[#00B33D] dark:text-[#10B981] tracking-wide">
+                  Tháng {currentMonthNum.toString().padStart(2, '0')}/{currentYear}
+                </span>
+                <button
+                  onClick={handleNextMonth}
+                  disabled={loadingMonth}
+                  className="p-1 rounded-full text-[#00B33D] dark:text-[#10B981] hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40"
+                  title="Tháng sau"
+                >
+                  <ChevronRight className="w-5 h-5" />
+                </button>
+              </div>
+            )}
+          </div>
+
+          {/* Desktop/Tablet Layout: Single Inline Row */}
+          <div className="hidden sm:flex items-center justify-between">
             <div className="flex items-center gap-4 sm:gap-8 text-xs sm:text-sm font-semibold text-slate-400">
               {[
                 { id: 'day', label: 'Theo ngày' },
@@ -405,17 +462,20 @@ export function Dashboard({
 
             {/* RIGHT COLUMN (lg:col-span-7): Calendar Grid ⟷ Charts View */}
             <div className="lg:col-span-7 space-y-6">
-              <div className="studio-card p-5 sm:p-6 space-y-5">
+              <div className="studio-card p-4 sm:p-6 space-y-4 sm:space-y-5">
                 {/* Header inside right card with View Switcher */}
-                <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-                  <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white">
-                    {viewMode === 'calendar' 
-                      ? `Bảng tiêu thụ điện năng tháng ${currentMonthNum}/${currentYear} (kWh)` 
-                      : `Biểu đồ tiêu thụ điện năng tháng ${currentMonthNum}/${currentYear} (kWh)`}
-                  </span>
+                <div className="flex items-center justify-between gap-2 pb-3 border-b border-slate-100 dark:border-slate-800">
+                  <div className="min-w-0 flex-1">
+                    <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white truncate block">
+                      {viewMode === 'calendar' 
+                        ? `Bảng tiêu thụ (${currentMonthNum}/${currentYear})` 
+                        : `Biểu đồ tiêu thụ (${currentMonthNum}/${currentYear})`}
+                    </span>
+                    <span className="text-[10px] text-slate-400 hidden sm:inline">Đơn vị: kWh</span>
+                  </div>
 
                   {/* Switcher Buttons (Calendar ⟷ Chart) */}
-                  <div className="flex items-center gap-1.5 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
+                  <div className="flex items-center gap-1 p-1 rounded-xl bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex-shrink-0">
                     <button
                       onClick={() => setViewMode('calendar')}
                       className={`p-1.5 sm:px-2.5 sm:py-1.5 rounded-lg text-xs font-semibold flex items-center gap-1.5 transition-all ${
@@ -426,7 +486,7 @@ export function Dashboard({
                       title="Xem dạng Lịch"
                     >
                       <CalendarIcon className="w-4 h-4" />
-                      <span className="hidden sm:inline">Lịch tháng</span>
+                      <span className="hidden md:inline">Lịch</span>
                     </button>
 
                     <button
@@ -439,7 +499,7 @@ export function Dashboard({
                       title="Xem dạng Biểu đồ"
                     >
                       <BarChart2 className="w-4 h-4" />
-                      <span className="hidden sm:inline">Biểu đồ</span>
+                      <span className="hidden md:inline">Biểu đồ</span>
                     </button>
                   </div>
                 </div>
@@ -463,12 +523,12 @@ export function Dashboard({
               </div>
 
               {/* Hardware Note Footer */}
-              <div className="p-4 rounded-2xl bg-slate-100/70 dark:bg-[#161B22] border border-slate-200/80 dark:border-[#30363D] flex items-center justify-between text-xs text-slate-500 dark:text-slate-400">
+              <div className="p-3.5 sm:p-4 rounded-2xl bg-slate-100/70 dark:bg-[#161B22] border border-slate-200/80 dark:border-[#30363D] flex flex-col sm:flex-row items-start sm:items-center justify-between gap-1.5 sm:gap-4 text-[11px] sm:text-xs text-slate-500 dark:text-slate-400">
                 <span className="flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5" />
+                  <Clock className="w-3.5 h-3.5 flex-shrink-0" />
                   Lưu trữ dữ liệu điện 60 ngày (2 tháng) • Tự động dọn dẹp khi đầy
                 </span>
-                <span className="font-semibold text-[#00B33D] dark:text-[#10B981]">
+                <span className="font-semibold text-[#00B33D] dark:text-[#10B981] flex-shrink-0">
                   Hunonic EKMeter (CT Clamp)
                 </span>
               </div>

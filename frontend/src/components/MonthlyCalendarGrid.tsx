@@ -136,7 +136,7 @@ export function MonthlyCalendarGrid({
             return (
               <div
                 key={cell.dateStr}
-                className="h-12 sm:h-14 rounded-xl flex items-center justify-center text-xs font-medium text-slate-300 dark:text-slate-600/60"
+                className="h-[52px] sm:h-15 rounded-xl flex items-center justify-center text-xs font-medium text-slate-300 dark:text-slate-600/60"
               >
                 {cell.dayNumber}
               </div>
@@ -151,12 +151,12 @@ export function MonthlyCalendarGrid({
                 onClick={() => onSelectDate && onSelectDate(cell.dateStr, cell.kwh ?? 0)}
                 onMouseEnter={() => setHoveredDate({ dateStr: cell.dateStr, kwh: cell.kwh ?? 0, day: cell.dayNumber })}
                 onMouseLeave={() => setHoveredDate(null)}
-                className="h-12 sm:h-14 rounded-xl bg-[#00B33D] text-white flex flex-col items-center justify-center p-1 cursor-pointer shadow-sm transition-all transform scale-[1.03] z-10"
+                className="h-[52px] sm:h-15 rounded-xl bg-[#00B33D] text-white flex flex-col items-center justify-center py-1 px-0.5 cursor-pointer shadow-md transition-all transform scale-[1.03] z-10"
               >
-                <span className="text-sm sm:text-base font-bold leading-tight">
+                <span className="text-sm font-bold leading-none">
                   {cell.dayNumber}
                 </span>
-                <span className="text-[9px] sm:text-[10px] font-semibold mt-0.5 leading-tight">
+                <span className="text-[9.5px] sm:text-[10.5px] font-semibold mt-1 leading-none tracking-tight">
                   {cell.kwh !== undefined ? `${cell.kwh.toFixed(2)} kWh` : '0.00 kWh'}
                 </span>
               </div>
@@ -170,10 +170,10 @@ export function MonthlyCalendarGrid({
               onClick={() => onSelectDate && onSelectDate(cell.dateStr, cell.kwh ?? 0)}
               onMouseEnter={() => setHoveredDate({ dateStr: cell.dateStr, kwh: cell.kwh ?? 0, day: cell.dayNumber })}
               onMouseLeave={() => setHoveredDate(null)}
-              className="h-12 sm:h-14 rounded-xl bg-slate-50/80 dark:bg-[#1C212D] border border-slate-200/60 dark:border-slate-800/80 hover:border-[#00B33D]/60 dark:hover:border-[#10B981]/60 flex flex-col items-center justify-center p-1 cursor-pointer transition-all duration-150"
+              className="h-[52px] sm:h-15 rounded-xl bg-slate-50/80 dark:bg-[#1C212D] border border-slate-200/60 dark:border-slate-800/80 hover:border-[#00B33D]/60 dark:hover:border-[#10B981]/60 flex flex-col items-center justify-center py-1 px-0.5 cursor-pointer transition-all duration-150"
             >
               <span
-                className={`text-xs sm:text-sm font-semibold leading-tight ${
+                className={`text-xs sm:text-sm font-semibold leading-none ${
                   cell.isSunday
                     ? 'text-[#EF4444] font-bold'
                     : 'text-slate-800 dark:text-slate-200'
@@ -183,11 +183,11 @@ export function MonthlyCalendarGrid({
               </span>
 
               {hasKwh ? (
-                <span className="text-[9px] sm:text-[10px] font-medium text-[#00B33D] dark:text-[#10B981] mt-0.5 leading-tight">
+                <span className="text-[9px] sm:text-[10px] font-medium text-[#00B33D] dark:text-[#10B981] mt-1 leading-none tracking-tight">
                   {cell.kwh!.toFixed(2)} kWh
                 </span>
               ) : (
-                <span className="h-2.5 mt-0.5" />
+                <span className="h-2.5 mt-1" />
               )}
             </div>
           );
