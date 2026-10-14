@@ -10,7 +10,7 @@ import { Hono } from 'hono';
 import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { serveStatic } from '@hono/node-server/serve-static';
-import { createHunonicClient, HunonicApiClient, type Device, type Home } from './lib/hunonic-api.js';
+import { createHunonicClient, HunonicApiClient, HunonicAuthError, type Device, type Home } from './lib/hunonic-api.js';
 import { hourlyStorage } from './lib/hourly-storage.js';
 
 const app = new Hono();
@@ -246,6 +246,13 @@ app.get('/api/dashboard/summary', async (c) => {
 
     return c.json({ success: true, data: responseData });
   } catch (error) {
+    if (error instanceof HunonicAuthError || (error instanceof Error && error.message.toLowerCase().includes('xác thực'))) {
+      return c.json({
+        success: false,
+        code: 'SESSION_REVOKED',
+        error: 'Phiên đăng nhập đã hết hạn do tài khoản vừa đăng nhập trên điện thoại (iPhone). Vui lòng đăng nhập lại trên trình duyệt!',
+      }, 401);
+    }
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });
@@ -325,6 +332,13 @@ app.get('/api/dashboard/history', async (c) => {
 
     return c.json({ success: false, error: 'Loại truy vấn không hợp lệ' }, 400);
   } catch (error) {
+    if (error instanceof HunonicAuthError || (error instanceof Error && error.message.toLowerCase().includes('xác thực'))) {
+      return c.json({
+        success: false,
+        code: 'SESSION_REVOKED',
+        error: 'Phiên đăng nhập đã hết hạn do tài khoản vừa đăng nhập trên điện thoại (iPhone). Vui lòng đăng nhập lại trên trình duyệt!',
+      }, 401);
+    }
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });

@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { Zap, Lock, Phone, ArrowRight, AlertCircle, Loader2 } from 'lucide-react';
+import { Zap, Lock, Phone, ArrowRight, AlertCircle, Loader2, Info } from 'lucide-react';
 import { ThemeToggle } from './ThemeToggle';
 
 interface LoginScreenProps {
   onLoginSuccess: (token: string, phone: string) => void;
   isDark: boolean;
   onToggleTheme: () => void;
+  sessionNotice?: string | null;
 }
 
-export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme }: LoginScreenProps) {
+export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme, sessionNotice }: LoginScreenProps) {
   const [phone, setPhone] = useState('0353700780');
   const [password, setPassword] = useState('La526488!');
   const [remember, setRemember] = useState(true);
@@ -80,6 +81,13 @@ export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme }: LoginScre
               Nhập số điện thoại và mật khẩu app Hunonic của bạn
             </p>
           </div>
+
+          {sessionNotice && (
+            <div className="p-3.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 text-xs flex items-center gap-2.5 leading-relaxed">
+              <Info className="w-4 h-4 flex-shrink-0" />
+              <span>{sessionNotice}</span>
+            </div>
+          )}
 
           {error && (
             <div className="p-3 rounded-xl bg-rose-500/10 border border-rose-500/20 text-rose-600 dark:text-rose-400 text-xs flex items-center gap-2">

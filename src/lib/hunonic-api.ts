@@ -105,6 +105,15 @@ export interface GraphDataResponse {
   };
 }
 
+export class HunonicAuthError extends Error {
+  public code: string;
+  constructor(message: string = 'Phiên đăng nhập đã bị hủy do đăng nhập trên thiết bị khác!') {
+    super(message);
+    this.name = 'HunonicAuthError';
+    this.code = 'SESSION_REVOKED';
+  }
+}
+
 export class HunonicApiClient {
   private token: string | null = null;
   private tokenExpiry: number = 0;
@@ -198,16 +207,31 @@ export class HunonicApiClient {
         signal: controller.signal,
       });
 
+      if (res.status === 401 || res.status === 403) {
+        throw new HunonicAuthError('Phiên đăng nhập đã hết hạn hoặc tài khoản vừa đăng nhập trên thiết bị khác (iPhone).');
+      }
+
       if (!res.ok && res.status >= 500) {
         throw new Error(`Hunonic Cloud Server error (HTTP ${res.status})`);
       }
 
       const text = await res.text();
+      let parsed: any;
       try {
-        return JSON.parse(text) as T;
+        parsed = JSON.parse(text);
       } catch {
         throw new Error(`Invalid response format from Hunonic API: ${text.slice(0, 100)}`);
       }
+
+      // Check if Hunonic returned a logical auth failure in body (e.g. status: false, message: "Lỗi xác thực!")
+      if (parsed && parsed.status === false && parsed.message) {
+        const msg = String(parsed.message).toLowerCase();
+        if (msg.includes('xác thực') || msg.includes('token') || msg.includes('hết hạn') || msg.includes('đăng nhập')) {
+          throw new HunonicAuthError(`Phiên đăng nhập không hợp lệ: ${parsed.message}`);
+        }
+      }
+
+      return parsed as T;
     } finally {
       clearTimeout(timeout);
     }

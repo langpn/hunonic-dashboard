@@ -70,6 +70,8 @@ function App() {
     return localStorage.getItem('hunonic_phone') || '0353700780';
   });
 
+  const [sessionNotice, setSessionNotice] = useState<string | null>(null);
+
   const [isDark, setIsDark] = useState<boolean>(() => {
     const saved = localStorage.getItem('hunonic_theme');
     if (saved) return saved === 'dark';
@@ -102,6 +104,17 @@ function App() {
     }
   }, [token]);
 
+  const handleSessionRevoked = (reason?: string) => {
+    localStorage.removeItem('hunonic_token');
+    sessionStorage.removeItem('hunonic_token');
+    setToken(null);
+    setSummary(null);
+    setError(null);
+    setSessionNotice(
+      reason || 'Tài khoản vừa được đăng nhập trên điện thoại (iPhone). Vui lòng nhấn Đăng nhập để tiếp tục sử dụng trên trình duyệt!'
+    );
+  };
+
   const fetchSummary = async (activeToken?: string) => {
     const authToken = activeToken || token;
     try {
@@ -112,18 +125,15 @@ function App() {
       }
 
       const res = await fetch('/api/dashboard/summary', { headers });
-      if (!res.ok) {
-        if (res.status === 401) {
-          // Token expired or invalid
-          handleLogout();
-          throw new Error('Phiên đăng nhập đã hết hạn. Vui lòng đăng nhập lại!');
-        }
-        throw new Error(`HTTP error! status: ${res.status}`);
-      }
+      const data = await res.json().catch(() => null);
 
-      const data = await res.json();
-      if (!data.success) {
-        throw new Error(data.error || 'Failed to fetch dashboard data');
+      if (!res.ok || (data && !data.success)) {
+        // Detect session invalidation / concurrent device login
+        if (res.status === 401 || (data && data.code === 'SESSION_REVOKED')) {
+          handleSessionRevoked(data?.error);
+          return;
+        }
+        throw new Error(data?.error || `HTTP error! status: ${res.status}`);
       }
 
       setSummary(data.data);
@@ -138,6 +148,7 @@ function App() {
   const handleLoginSuccess = (newToken: string, userPhone: string) => {
     setToken(newToken);
     setPhone(userPhone);
+    setSessionNotice(null);
     fetchSummary(newToken);
   };
 
@@ -147,15 +158,17 @@ function App() {
     setToken(null);
     setSummary(null);
     setError(null);
+    setSessionNotice(null);
   };
 
-  // 1. Not logged in -> Show Login Screen
+  // 1. Not logged in -> Show Login Screen with notice if session was revoked
   if (!token) {
     return (
       <LoginScreen
         onLoginSuccess={handleLoginSuccess}
         isDark={isDark}
         onToggleTheme={toggleTheme}
+        sessionNotice={sessionNotice}
       />
     );
   }
@@ -165,9 +178,15 @@ function App() {
     return <LoadingScreen />;
   }
 
-  // 3. Error State
+  // 3. Error State with reset session escape hatch
   if (error && !summary) {
-    return <ErrorScreen message={error} onRetry={() => fetchSummary()} />;
+    return (
+      <ErrorScreen
+        message={error}
+        onRetry={() => fetchSummary()}
+        onResetSession={handleLogout}
+      />
+    );
   }
 
   // 4. Authenticated Dashboard View
