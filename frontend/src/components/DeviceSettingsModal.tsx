@@ -769,7 +769,7 @@ export function DeviceSettingsModal({
                 </div>
                 <div className="flex justify-between border-b border-slate-800/80 pb-2">
                   <span className="text-slate-400">Phiên bản Firmware:</span>
-                  <strong className="text-white">260113</strong>
+                  <strong className="text-emerald-400">260701 (Mới nhất)</strong>
                 </div>
                 <div className="flex justify-between border-b border-slate-800/80 pb-2">
                   <span className="text-slate-400">Kết nối mạng:</span>

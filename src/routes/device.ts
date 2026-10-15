@@ -430,7 +430,7 @@ const deviceSettingsStore: Record<string, DeviceSettingsData> = {
       root_id: 'Zml4ZWRfbm9uY2Ux:oMAECKiJCzO55DGTy5+mqAuooiN9xd5B',
       qr_code: 'H26230844153246002',
       batch_number: 'S-653202',
-      firmware_version: '260113',
+      firmware_version: '260701',
       warranty_months: 12,
     },
   },
