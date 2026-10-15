@@ -11,6 +11,7 @@ import { YearlyChart } from './YearlyChart';
 import { CustomRangeView } from './CustomRangeView';
 import { AddDeviceModal } from './AddDeviceModal';
 import { LoadSettingModal } from './LoadSettingModal';
+import { DayDetailModal } from './DayDetailModal';
 import type { SummaryData } from '../App';
 
 interface DashboardProps {
@@ -41,6 +42,7 @@ export function Dashboard({
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [selectedDayDetail, setSelectedDayDetail] = useState<{ dateStr: string; kwh: number } | null>(null);
 
   // Dynamic Device Management
   const electricMeters = summary?.electricMeters || [];
@@ -81,13 +83,22 @@ export function Dashboard({
   const electricityRate = summary?.electricityRate;
   const ratePrice = electricityRate?.price ? parseInt(electricityRate.price) : 3800;
 
-  // Sync initial month data
+  // Sync initial month data & real-time telemetry when summary loads
   useEffect(() => {
     if (summary?.currentMonth) {
       setActiveMonthData(summary.currentMonth);
     }
     if ((summary as any)?.active_device_id) {
       setActiveDeviceId(String((summary as any).active_device_id));
+    }
+    if (summary?.today?.power_current_w !== undefined) {
+      const pw = summary.today.power_current_w;
+      const amp = pw <= 48 ? 0.1 : parseFloat((pw / (224.0 * 0.95)).toFixed(2));
+      setLiveTelemetry((prev) => ({
+        ...prev,
+        powerW: pw,
+        currentA: amp,
+      }));
     }
   }, [summary]);
 
@@ -481,11 +492,11 @@ export function Dashboard({
               {/* Today Card */}
               <div className="panel-subtle p-5 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-slate-400 uppercase font-semibold">Hôm nay</span>
-                  <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-600 dark:text-emerald-400 mt-1">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Hôm nay</span>
+                  <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-400 mt-1">
                     {today.kwh.toFixed(2)} <span className="text-base font-medium">kWh</span>
                   </div>
-                  <span className="text-xs font-medium text-slate-500 dark:text-slate-400 mt-0.5 block">
+                  <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 mt-0.5 block">
                     Ước tính: {today.cost_estimated.toLocaleString('vi-VN')} ₫
                   </span>
                 </div>
@@ -497,13 +508,13 @@ export function Dashboard({
               {/* Month Card */}
               <div className="panel-subtle p-5 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-slate-400 uppercase font-semibold">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">
                     Tháng {currentMonthNum}/{currentYear}
                   </span>
                   <div className="text-2xl sm:text-3xl font-extrabold font-mono text-slate-900 dark:text-white mt-1">
                     {totalKwh.toFixed(2)} <span className="text-base font-medium text-slate-400">kWh</span>
                   </div>
-                  <span className="text-xs font-medium text-rose-500 mt-0.5 block">
+                  <span className="text-xs font-semibold text-rose-600 dark:text-rose-400 mt-0.5 block">
                     {totalPrice.toLocaleString('vi-VN')} ₫ (@{ratePrice.toLocaleString('vi-VN')}đ)
                   </span>
                 </div>
@@ -600,18 +611,18 @@ export function Dashboard({
                   </div>
                 </div>
 
-                <div className="border-t border-slate-100 dark:border-white/5 pt-4 text-xs space-y-2 text-slate-500 dark:text-slate-400">
-                  <div className="flex justify-between">
+                <div className="border-t border-slate-200/80 dark:border-white/5 pt-4 text-xs space-y-2 text-slate-600 dark:text-slate-400">
+                  <div className="flex justify-between items-center">
                     <span>Điện năng tiêu thụ:</span>
-                    <strong className="text-slate-800 dark:text-slate-100 font-mono">{totalKwh.toFixed(2)} kWh</strong>
+                    <strong className="text-slate-900 dark:text-slate-100 font-mono font-bold text-sm">{totalKwh.toFixed(2)} kWh</strong>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span>Thành tiền tạm tính:</span>
-                    <strong className="text-rose-500 font-mono">{totalPrice.toLocaleString('vi-VN')} ₫</strong>
+                    <strong className="text-rose-600 dark:text-rose-400 font-mono font-bold text-sm">{totalPrice.toLocaleString('vi-VN')} ₫</strong>
                   </div>
-                  <div className="flex justify-between">
+                  <div className="flex justify-between items-center">
                     <span>Đơn giá áp dụng:</span>
-                    <strong className="text-slate-700 dark:text-slate-300 font-mono">{ratePrice.toLocaleString('vi-VN')} ₫/kWh</strong>
+                    <strong className="text-slate-800 dark:text-slate-200 font-mono font-bold">{ratePrice.toLocaleString('vi-VN')} ₫/kWh</strong>
                   </div>
                 </div>
               </div>
@@ -683,9 +694,9 @@ export function Dashboard({
                   dailyData={activeMonthData?.daily_data || []}
                   ratePrice={ratePrice}
                   selectedDate={selectedDate}
-                  onSelectDate={(date) => {
-                    setSelectedDate(date);
-                    setPeriodTab('day'); // Jump to 24h view for that date
+                  onSelectDate={(dateStr, kwh) => {
+                    setSelectedDate(dateStr);
+                    setSelectedDayDetail({ dateStr, kwh });
                   }}
                 />
               ) : (
@@ -752,6 +763,16 @@ export function Dashboard({
           setDeviceMaxA(newVal);
           localStorage.setItem(`device_load_max_${activeDeviceId}`, String(newVal));
         }}
+      />
+
+      {/* Slide-Up Day Detail Modal (No Tab Redirect) */}
+      <DayDetailModal
+        isOpen={!!selectedDayDetail}
+        onClose={() => setSelectedDayDetail(null)}
+        dateStr={selectedDayDetail?.dateStr || ''}
+        dayKwh={selectedDayDetail?.kwh || 0}
+        ratePrice={ratePrice}
+        token={token}
       />
     </div>
   );

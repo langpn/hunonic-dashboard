@@ -8,20 +8,20 @@
    ========================================================================== */
 
 :root {
-  --canvas-bg: #f8fafc;
+  --canvas-bg: #eef2f6;
   --surface-bg: #ffffff;
-  --surface-muted: #f1f5f9;
+  --surface-muted: #f8fafc;
   --surface-hover: #e2e8f0;
-  --border-subtle: rgba(0, 0, 0, 0.08);
-  --border-strong: rgba(0, 0, 0, 0.16);
+  --border-subtle: rgba(0, 0, 0, 0.10);
+  --border-strong: rgba(0, 0, 0, 0.22);
   --text-primary: #0f172a;
-  --text-secondary: #475569;
-  --text-tertiary: #94a3b8;
+  --text-secondary: #334155;
+  --text-tertiary: #64748b;
   --accent-green: #059669;
-  --accent-green-subtle: rgba(5, 150, 105, 0.1);
+  --accent-green-subtle: rgba(5, 150, 105, 0.12);
   --accent-amber: #d97706;
   --accent-rose: #e11d48;
-  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+  --card-shadow: 0 1px 3px rgba(0, 0, 0, 0.05), 0 6px 16px rgba(0, 0, 0, 0.04);
 }
 
 .dark {

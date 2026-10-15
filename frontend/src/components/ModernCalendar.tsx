@@ -140,6 +140,7 @@ export function ModernCalendar({
       <div className="grid grid-cols-7 gap-2 sm:gap-2.5">
         {calendarCells.map((cell) => {
           const isSelected = selectedDate === cell.dateStr;
+          const isToday = cell.dateStr === new Date().toISOString().slice(0, 10);
           const hasKwh = cell.isCurrentMonth && cell.kwh !== undefined && cell.kwh > 0;
 
           // Inactive filler day
@@ -147,7 +148,7 @@ export function ModernCalendar({
             return (
               <div
                 key={cell.dateStr}
-                className="h-14 sm:h-16 rounded-xl flex items-center justify-center text-xs font-mono text-slate-300 dark:text-slate-700/50"
+                className="h-14 sm:h-16 rounded-xl flex items-center justify-center text-xs font-mono text-slate-300 dark:text-slate-700/50 select-none"
               >
                 {cell.dayNumber}
               </div>
@@ -164,28 +165,43 @@ export function ModernCalendar({
               className={`h-14 sm:h-16 rounded-xl p-2 flex flex-col justify-between cursor-pointer transition-all duration-150 relative overflow-hidden ${
                 isSelected
                   ? 'bg-emerald-600 text-white shadow-md shadow-emerald-600/30 ring-2 ring-emerald-500 ring-offset-2 ring-offset-white dark:ring-offset-[#12161f]'
-                  : 'bg-white dark:bg-[#181d28] border border-slate-200/80 dark:border-white/5 hover:border-emerald-500/50 dark:hover:border-emerald-400/50 hover:shadow-sm'
+                  : isToday
+                  ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-2 border-emerald-500 shadow-sm ring-2 ring-emerald-500/40 ring-offset-1 ring-offset-white dark:ring-offset-[#12161f]'
+                  : 'bg-white dark:bg-[#181d28] border border-slate-200/90 dark:border-white/5 hover:border-emerald-500/60 dark:hover:border-emerald-400/50 hover:shadow-sm'
               }`}
             >
               {/* Day Number Header */}
               <div className="flex items-center justify-between w-full">
-                <span
-                  className={`text-xs sm:text-sm font-semibold leading-none ${
-                    isSelected
-                      ? 'text-white font-bold'
-                      : cell.isSunday
-                      ? 'text-rose-500 font-bold'
-                      : 'text-slate-700 dark:text-slate-200'
-                  }`}
-                >
-                  {cell.dayNumber}
-                </span>
+                <div className="flex items-center gap-1">
+                  <span
+                    className={`text-xs sm:text-sm font-semibold leading-none ${
+                      isSelected
+                        ? 'text-white font-bold'
+                        : isToday
+                        ? 'text-emerald-700 dark:text-emerald-400 font-black'
+                        : cell.isSunday
+                        ? 'text-rose-600 font-bold'
+                        : 'text-slate-800 dark:text-slate-200'
+                    }`}
+                  >
+                    {cell.dayNumber}
+                  </span>
+                  {isToday && !isSelected && (
+                    <span className="hidden sm:inline-block px-1 py-0.2 text-[8px] font-bold uppercase rounded bg-emerald-600 text-white leading-tight">
+                      Nay
+                    </span>
+                  )}
+                </div>
 
                 {/* Energy Activity Micro-Indicator */}
                 {hasKwh && (
                   <span
                     className={`w-1.5 h-1.5 rounded-full ${
-                      isSelected ? 'bg-white' : 'bg-emerald-500'
+                      isSelected
+                        ? 'bg-white'
+                        : isToday
+                        ? 'bg-emerald-500 animate-pulse'
+                        : 'bg-emerald-500'
                     }`}
                   />
                 )}
@@ -196,13 +212,17 @@ export function ModernCalendar({
                 {hasKwh ? (
                   <span
                     className={`text-[10px] sm:text-xs font-mono font-medium tracking-tight block truncate ${
-                      isSelected ? 'text-emerald-100' : 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                      isSelected
+                        ? 'text-emerald-100'
+                        : isToday
+                        ? 'text-emerald-700 dark:text-emerald-300 font-bold'
+                        : 'text-emerald-700 dark:text-emerald-400 font-semibold'
                     }`}
                   >
                     {cell.kwh!.toFixed(2)} <span className="text-[9px] opacity-80">kWh</span>
                   </span>
                 ) : (
-                  <span className={`text-[10px] font-mono block ${isSelected ? 'text-white/60' : 'text-slate-300 dark:text-slate-600'}`}>
+                  <span className={`text-[10px] font-mono block ${isSelected ? 'text-white/60' : 'text-slate-400 dark:text-slate-600'}`}>
                     0.00
                   </span>
                 )}
@@ -212,7 +232,9 @@ export function ModernCalendar({
               {hasKwh && !isSelected && (
                 <div
                   style={{ width: `${Math.round(cell.intensity * 100)}%` }}
-                  className="absolute bottom-0 left-0 h-0.5 bg-emerald-500/80 dark:bg-emerald-400/80 rounded-r-full"
+                  className={`absolute bottom-0 left-0 h-0.5 rounded-r-full ${
+                    isToday ? 'bg-emerald-500' : 'bg-emerald-500/80 dark:bg-emerald-400/80'
+                  }`}
                 />
               )}
             </div>
