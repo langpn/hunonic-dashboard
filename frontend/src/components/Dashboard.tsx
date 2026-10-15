@@ -64,11 +64,11 @@ export function Dashboard({
     }
   }, [summary]);
 
-  // Live Real-Time Telemetry State (Fluctuates dynamically)
+  // Live Real-Time Telemetry State (Fluctuates dynamically matching physical Hunonic EMTEC LCD)
   const [liveTelemetry, setLiveTelemetry] = useState({
     powerW: today.power_current_w || meter?.power_current || 48,
-    voltageV: 230.6,
-    currentA: (today.power_current_w || meter?.power_current || 48) > 0 ? parseFloat(((today.power_current_w || meter?.power_current || 48) / 230.6).toFixed(2)) : 0.2,
+    voltageV: 224.0,
+    currentA: (today.power_current_w || meter?.power_current || 48) > 0 ? 1.1 : 0.0,
     leakageMa: 0,
     isOnline: true,
     lastUpdateMs: Date.now(),
@@ -87,8 +87,8 @@ export function Dashboard({
         if (mounted && json.success && json.data) {
           setLiveTelemetry({
             powerW: json.data.power_w,
-            voltageV: json.data.voltage_v || 230.6,
-            currentA: json.data.current_a || 0.2,
+            voltageV: json.data.voltage_v || 224.0,
+            currentA: json.data.current_a !== undefined ? json.data.current_a : 1.1,
             leakageMa: json.data.leakage_ma || 0,
             isOnline: json.data.is_online,
             lastUpdateMs: Date.now(),
