@@ -201,11 +201,26 @@ export class HunonicApiClient {
 
     try {
       const url = `${this.baseUrl}${endpoint}`;
-      const res = await fetch(url, {
+      let res = await fetch(url, {
         ...options,
         headers,
         signal: controller.signal,
       });
+
+      // Auto-relogin once if token expired or revoked and credentials exist
+      if ((res.status === 401 || res.status === 403 || res.status >= 500) && this.config.phone && this.config.password && !endpoint.includes('/auth/login')) {
+        try {
+          const freshToken = await this.login();
+          headers.set('Authorization', `Bearer ${freshToken}`);
+          res = await fetch(url, {
+            ...options,
+            headers,
+            signal: controller.signal,
+          });
+        } catch {
+          // Continue to handle initial response
+        }
+      }
 
       if (res.status === 401 || res.status === 403) {
         throw new HunonicAuthError('Phiên đăng nhập đã hết hạn hoặc tài khoản vừa đăng nhập trên thiết bị khác (iPhone).');
