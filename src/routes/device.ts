@@ -1,6 +1,6 @@
 import { Hono } from 'hono';
 import { getClient, getDaemonClient, parseJsonSafe, handleAuthError, setSummaryCache } from '../lib/app-context.js';
-import { sqliteEnergy } from '../lib/sqlite-db.js';
+import { sqliteEnergy, getVnTimeParts } from '../lib/sqlite-db.js';
 
 export const deviceRouter = new Hono();
 
@@ -120,10 +120,16 @@ deviceRouter.get('/api/device/realtime', async (c) => {
       sqliteEnergy.recordFluctuatingPower(powerW);
     }
 
+    // Real-time live accumulated today kWh from SQLite
+    const { dateStr: todayStr } = getVnTimeParts();
+    const todayHourly = sqliteEnergy.getHourlyForDate(todayStr);
+    const realtimeTodayKwh = parseFloat(todayHourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
+
     const telemetryData = {
       power_w: powerW,
       voltage_v: voltageV,
       current_a: currentA,
+      today_kwh: realtimeTodayKwh,
       leakage_ma: 0,
       last_online: meter.last_online,
       is_online: isOnline,

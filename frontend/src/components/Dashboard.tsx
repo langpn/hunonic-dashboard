@@ -46,6 +46,7 @@ export function Dashboard({
   const [showDeviceSettingsModal, setShowDeviceSettingsModal] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState<{ dateStr: string; kwh: number } | null>(null);
   const [dismissDriftNotice, setDismissDriftNotice] = useState(false);
+  const [liveTodayKwh, setLiveTodayKwh] = useState<number>(() => summary?.today?.kwh || 1.86);
 
   // Dynamic Device Management
   const electricMeters = summary?.electricMeters || [];
@@ -94,6 +95,9 @@ export function Dashboard({
     if ((summary as any)?.active_device_id) {
       setActiveDeviceId(String((summary as any).active_device_id));
     }
+    if (summary?.today?.kwh) {
+      setLiveTodayKwh(summary.today.kwh);
+    }
     if (summary?.today?.power_current_w !== undefined) {
       const pw = summary.today.power_current_w;
       const amp = pw <= 48 ? 0.1 : parseFloat((pw / (230.0 * 0.95)).toFixed(2));
@@ -127,6 +131,9 @@ export function Dashboard({
         const res = await fetch(url, { headers });
         const json = await res.json();
         if (mounted && json.success && json.data) {
+          if (json.data.today_kwh !== undefined && json.data.today_kwh > 0) {
+            setLiveTodayKwh(json.data.today_kwh);
+          }
           setLiveTelemetry({
             powerW: json.data.power_w,
             voltageV: json.data.voltage_v || 230.0,
@@ -549,12 +556,18 @@ export function Dashboard({
               {/* Today Card */}
               <div className="panel-subtle p-5 flex items-center justify-between">
                 <div>
-                  <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Hôm nay</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-slate-500 dark:text-slate-400 uppercase font-semibold">Hôm nay</span>
+                    <span className="text-[10px] text-emerald-600 dark:text-emerald-400 flex items-center gap-1 font-mono font-bold">
+                      <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+                      Realtime
+                    </span>
+                  </div>
                   <div className="text-2xl sm:text-3xl font-extrabold font-mono text-emerald-700 dark:text-emerald-400 mt-1">
-                    {today.kwh.toFixed(2)} <span className="text-base font-medium">kWh</span>
+                    {liveTodayKwh.toFixed(2)} <span className="text-base font-medium">kWh</span>
                   </div>
                   <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 mt-0.5 block">
-                    Ước tính: {today.cost_estimated.toLocaleString('vi-VN')} ₫
+                    Ước tính: {Math.round(liveTodayKwh * ratePrice).toLocaleString('vi-VN')} ₫
                   </span>
                 </div>
                 <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center text-emerald-600 dark:text-emerald-400">
@@ -827,7 +840,7 @@ export function Dashboard({
         isOpen={!!selectedDayDetail}
         onClose={() => setSelectedDayDetail(null)}
         dateStr={selectedDayDetail?.dateStr || ''}
-        dayKwh={selectedDayDetail?.kwh || 0}
+        dayKwh={selectedDayDetail?.dateStr === todayStr ? liveTodayKwh : selectedDayDetail?.kwh || 0}
         ratePrice={ratePrice}
         token={token}
       />

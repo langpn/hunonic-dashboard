@@ -39,6 +39,14 @@ export function DayDetailModal({
     }
   }, [isOpen, dateStr]);
 
+  // Sync real-time ticking kWh for today
+  const isToday = new Date().toISOString().slice(0, 10) === dateStr;
+  useEffect(() => {
+    if (isToday && dayKwh > 0) {
+      setTotalKwh(dayKwh);
+    }
+  }, [dayKwh, isToday]);
+
   if (!isOpen) return null;
 
   const fetchDayDetail = async (targetDate: string) => {
@@ -51,9 +59,10 @@ export function DayDetailModal({
       const json = await res.json();
       if (json.success && json.data) {
         setData(json.data.hourly || []);
-        setTotalKwh(json.data.total_kwh || dayKwh || 0);
+        const serverKwh = json.data.total_kwh || 0;
+        setTotalKwh(isToday && dayKwh > 0 ? Math.max(serverKwh, dayKwh) : serverKwh || dayKwh);
         setPeakHour(json.data.peak_hour || 0);
-        setPeakPowerW(json.data.peak_power_w || 0);
+        setPeakPowerW(Math.min(1240, json.data.peak_power_w || 0)); // Capped at real AC physical max 1240W
         setIsFromCloud(!!json.data.is_from_cloud);
       }
     } catch (e) {
@@ -76,7 +85,6 @@ export function DayDetailModal({
   // Format date display (e.g. Ngày 15 tháng 10, 2026)
   const parts = dateStr.split('-');
   const formattedDate = parts.length === 3 ? `Ngày ${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
-  const isToday = new Date().toISOString().slice(0, 10) === dateStr;
 
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-200">

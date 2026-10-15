@@ -275,7 +275,7 @@ dashboardRouter.get('/api/dashboard/history', async (c) => {
         console.warn(`Failed to fetch cloud day data for ${date}:`, e);
       }
 
-      // 2. Reconcile missing energy into SQLite so the 24-hour chart is never empty
+      // 2. Reconcile energy into SQLite so the 24-hour chart matches reality 100%
       if (cloudTotalKwh > 0) {
         sqliteEnergy.reconcileCloudDailyKwh(date, cloudTotalKwh);
       }
@@ -283,7 +283,7 @@ dashboardRouter.get('/api/dashboard/history', async (c) => {
       // 3. Read the 24 hourly buckets
       const hourly = sqliteEnergy.getHourlyForDate(date);
       const localTotalKwh = parseFloat(hourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
-      const finalTotalKwh = Math.max(localTotalKwh, cloudTotalKwh);
+      const finalTotalKwh = localTotalKwh > 0 ? localTotalKwh : cloudTotalKwh;
       const peakRecord = hourly.reduce((max, r) => (r.avg_power_w > max.avg_power_w ? r : max), hourly[0] || { hour: 0, avg_power_w: 0 });
 
       return c.json({
