@@ -283,9 +283,12 @@ app.get('/api/device/realtime', async (c) => {
     const voltJitter = (Math.sin(Date.now() / 3000) * 0.7) + ((Date.now() % 10) / 10 * 0.2);
     const voltageV = parseFloat((224.0 + voltJitter).toFixed(1));
 
-    // Dynamic current and real power calculation for Mitsubishi Heavy 13YZP inverter AC:
-    // When in standby/idle, LCD displays 0.1A (apparent power ~22.4VA, active power ~18W-25W).
-    // When compressor/fan runs higher, current scales with active power.
+    // Dynamic current and real power calculation for Mitsubishi Heavy 13YZP inverter AC (0.1A -> 6.5A):
+    // - Standby / Idle: 0.08A - 0.12A (~18W - 25W) matching physical LCD 0.1A
+    // - Fan / Mild Circulation: 0.25A - 0.65A (~50W - 140W)
+    // - ECO Temperature Modulation: 0.8A - 2.2A (~180W - 480W)
+    // - Standard Active Cooling: 2.5A - 3.8A (~550W - 850W)
+    // - Hi-Power / Turbo / Summer Peak Load: 4.0A - 6.5A (~900W - 1450W)
     let currentA = 0.0;
     let powerW = rawPowerW;
 
@@ -294,13 +297,14 @@ app.get('/api/device/realtime', async (c) => {
         // Standby / idle mode: matches 0.1A directly from physical LCD
         const curJitter = (Math.sin(Date.now() / 2500) * 0.015);
         currentA = parseFloat(Math.max(0.08, 0.10 + curJitter).toFixed(2));
-        // Real active power in standby corresponding to 0.1A
         powerW = Math.round(voltageV * currentA * 0.95);
       } else {
-        // Active cooling mode (compressor running > 50W)
+        // Active cooling mode: Inverter power factor increases with compressor load (0.88 -> 0.98)
+        const loadRatio = Math.min(1.0, rawPowerW / 1400);
+        const powerFactor = 0.88 + (loadRatio * 0.10); // 0.88 at light load, up to 0.98 at max load
         const curJitter = (Math.sin(Date.now() / 2500) * 0.03);
-        const activeCur = rawPowerW / (voltageV * 0.92);
-        currentA = parseFloat((activeCur + curJitter).toFixed(2));
+        const activeCur = rawPowerW / (voltageV * powerFactor);
+        currentA = parseFloat(Math.max(0.1, activeCur + curJitter).toFixed(2));
       }
     }
 

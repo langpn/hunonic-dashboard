@@ -162,32 +162,39 @@ export function Dashboard({
   const currentA = liveTelemetry.currentA;
   const leakageMa = liveTelemetry.leakageMa;
 
-  // AC Compressor Operating Intelligence
+  // AC Compressor Operating Intelligence - Calibrated for Mitsubishi Heavy 13YZP (0.1A -> 6.5A)
   let acState = {
-    title: 'Chế độ chờ',
-    sub: 'Standby / Tiêu thụ tối thiểu',
+    title: 'Chế độ chờ (Standby)',
+    sub: 'Dòng tải ~0.1A • Nuôi bo mạch vi điều khiển',
     badgeClass: 'bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 border-slate-200 dark:border-slate-700',
     dotClass: 'bg-slate-400',
   };
 
-  if (powerW >= 600) {
+  if (currentA >= 4.0 || powerW >= 900) {
+    acState = {
+      title: 'Làm lạnh cực đại (Hi Power / Turbo)',
+      sub: `Dòng tải ${currentA.toFixed(1)}A • Máy nén Inverter chạy hết công suất đỉnh`,
+      badgeClass: 'bg-rose-500/10 text-rose-600 dark:text-rose-400 border-rose-500/30',
+      dotClass: 'bg-rose-500 animate-ping',
+    };
+  } else if (currentA >= 2.5 || powerW >= 550) {
     acState = {
       title: 'Làm lạnh công suất cao',
-      sub: 'Máy nén Inverter tăng tải tối đa',
+      sub: `Dòng tải ${currentA.toFixed(1)}A • Kéo nhiệt độ phòng nhanh`,
       badgeClass: 'bg-amber-500/10 text-amber-600 dark:text-amber-400 border-amber-500/30',
       dotClass: 'bg-amber-500 animate-pulse',
     };
-  } else if (powerW >= 150) {
+  } else if (currentA >= 0.7 || powerW >= 150) {
     acState = {
-      title: 'Làm lạnh ổn định (ECO)',
-      sub: 'Máy nén duy trì nhiệt độ cài đặt',
+      title: 'Duy trì nhiệt độ (ECO)',
+      sub: `Dòng tải ${currentA.toFixed(1)}A • Biến tần hạ tải tiết kiệm điện`,
       badgeClass: 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
       dotClass: 'bg-emerald-500 animate-pulse',
     };
-  } else if (powerW >= 15) {
+  } else if (currentA >= 0.2 || powerW >= 30) {
     acState = {
       title: 'Quạt gió tuần hoàn',
-      sub: 'Phòng đã đủ nhiệt độ, máy nén tạm ngắt',
+      sub: 'Phòng đã đủ nhiệt độ • Máy nén ngắt tạm thời',
       badgeClass: 'bg-sky-500/10 text-sky-600 dark:text-sky-400 border-sky-500/30',
       dotClass: 'bg-sky-500',
     };
@@ -323,11 +330,25 @@ export function Dashboard({
                   </strong>
                 </div>
 
-                <div className="panel-subtle p-3 text-center">
-                  <span className="text-slate-400 text-[10px] uppercase font-semibold block">Dòng điện</span>
+                <div className="panel-subtle p-3 text-center relative overflow-hidden">
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[10px] uppercase font-semibold block">Dòng điện</span>
+                    <span className="text-[9px] font-mono font-bold text-slate-400">
+                      {Math.min(100, Math.round((currentA / 6.5) * 100))}% tải
+                    </span>
+                  </div>
                   <strong className="text-sm sm:text-base font-bold font-mono text-slate-800 dark:text-slate-100 mt-0.5 block">
                     {currentA} <span className="text-xs font-normal text-slate-400">A</span>
                   </strong>
+                  {/* Subtle load bar under amperage (max 6.5A for 13YZP) */}
+                  <div className="w-full bg-slate-200 dark:bg-slate-700/50 h-1 rounded-full mt-1.5 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-300 ${
+                        currentA >= 4.0 ? 'bg-rose-500' : currentA >= 2.5 ? 'bg-amber-500' : currentA >= 0.7 ? 'bg-emerald-500' : 'bg-slate-400'
+                      }`}
+                      style={{ width: `${Math.min(100, Math.max(3, Math.round((currentA / 6.5) * 100)))}%` }}
+                    />
+                  </div>
                 </div>
 
                 <div className="panel-subtle p-3 text-center">
