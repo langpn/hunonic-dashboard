@@ -96,7 +96,7 @@ export function Dashboard({
     }
     if (summary?.today?.power_current_w !== undefined) {
       const pw = summary.today.power_current_w;
-      const amp = pw <= 48 ? 0.1 : parseFloat((pw / (224.0 * 0.95)).toFixed(2));
+      const amp = pw <= 48 ? 0.1 : parseFloat((pw / (230.0 * 0.95)).toFixed(2));
       setLiveTelemetry((prev) => ({
         ...prev,
         powerW: pw,
@@ -108,7 +108,7 @@ export function Dashboard({
   // Live Real-Time Telemetry State (Fluctuates dynamically matching physical Hunonic EMTEC LCD)
   const [liveTelemetry, setLiveTelemetry] = useState({
     powerW: today.power_current_w || meter?.power_current || 22,
-    voltageV: 224.0,
+    voltageV: 230.0,
     currentA: (today.power_current_w || meter?.power_current || 22) > 0 ? 0.1 : 0.0,
     leakageMa: 0,
     isOnline: true,
@@ -129,7 +129,7 @@ export function Dashboard({
         if (mounted && json.success && json.data) {
           setLiveTelemetry({
             powerW: json.data.power_w,
-            voltageV: json.data.voltage_v || 224.0,
+            voltageV: json.data.voltage_v || 230.0,
             currentA: json.data.current_a !== undefined ? json.data.current_a : 0.1,
             leakageMa: json.data.leakage_ma || 0,
             isOnline: json.data.is_online,
@@ -462,8 +462,32 @@ export function Dashboard({
 
               {/* Instant Electrical Parameters */}
               <div className="grid grid-cols-3 gap-3 pt-2 text-xs">
-                <div className="panel-subtle p-3 text-center">
-                  <span className="text-slate-400 text-[10px] uppercase font-semibold block">Điện áp</span>
+                <div 
+                  onClick={async () => {
+                    const input = window.prompt('Hiệu chuẩn điện áp lưới cơ sở (Volt) theo đồng hồ thực tế:', String(Math.round(voltageV)));
+                    if (input) {
+                      const val = parseFloat(input);
+                      if (!isNaN(val) && val >= 100 && val <= 300) {
+                        try {
+                          await fetch('/api/device/voltage-config', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ device_id: activeDeviceId, base_voltage_v: val }),
+                          });
+                          setLiveTelemetry((prev) => ({ ...prev, voltageV: val }));
+                        } catch {}
+                      }
+                    }
+                  }}
+                  className="panel-subtle p-3 text-center cursor-pointer hover:border-emerald-500/40 transition-all group"
+                  title="Bấm để hiệu chuẩn nhanh điện áp lưới theo đồng hồ (VD: 230V)"
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-slate-400 text-[10px] uppercase font-semibold block">Điện áp</span>
+                    <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-emerald-500 transition-colors">
+                      Hiệu chuẩn
+                    </span>
+                  </div>
                   <strong className="text-sm sm:text-base font-bold font-mono text-slate-800 dark:text-slate-100 mt-0.5 block">
                     {voltageV} <span className="text-xs font-normal text-slate-400">V</span>
                   </strong>
