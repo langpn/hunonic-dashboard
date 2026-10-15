@@ -399,6 +399,87 @@ export class HunonicApiClient {
     });
     return !!res.status;
   }
+
+  /**
+   * Rename device on Hunonic Cloud (PUT /hun-api/device/update-root/:root_id)
+   */
+  async renameDevice(deviceId: string, rootId: string, newName: string): Promise<boolean> {
+    const res = await this.request<{ status: boolean; message: string; data?: any }>(
+      `/hun-api/device/update-root/${encodeURIComponent(rootId)}`,
+      {
+        method: 'PUT',
+        body: JSON.stringify({
+          devices: JSON.stringify([{ id: parseInt(deviceId), name: newName.trim() }]),
+        }),
+      }
+    );
+    return !!res.status;
+  }
+
+  /**
+   * Change device room on Hunonic Cloud (POST /hun-api/room/change-device-room)
+   */
+  async changeDeviceRoom(deviceId: string, roomId: string): Promise<boolean> {
+    const res = await this.request<{ status: boolean; message: string; data?: any }>(
+      '/hun-api/room/change-device-room',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          device_id: String(deviceId),
+          room_id: String(roomId),
+        }),
+      }
+    );
+    return !!res.status;
+  }
+
+  /**
+   * Set electricity rate on Hunonic Cloud (POST /hun-api/atmwifi/add-electricity-rate)
+   */
+  async setElectricityRate(rootId: string, groupId: string = '1', price: string = '3800'): Promise<boolean> {
+    const res = await this.request<{ status: boolean; message: string; data?: any }>(
+      '/hun-api/atmwifi/add-electricity-rate',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          root_id: rootId,
+          electricity_group_id: String(groupId),
+          price: String(price),
+        }),
+      }
+    );
+    return !!res.status;
+  }
+
+  /**
+   * Set electric power consumption limit on Hunonic Cloud (POST /hun-api/atmwifi/set-electric-power-limit)
+   */
+  async setPowerLimit(rootId: string, limitKwh: number): Promise<boolean> {
+    const res = await this.request<{ status: boolean; message: string; data?: any }>(
+      '/hun-api/atmwifi/set-electric-power-limit',
+      {
+        method: 'POST',
+        body: JSON.stringify({
+          root_id: rootId,
+          limit: limitKwh,
+        }),
+      }
+    );
+    return !!res.status;
+  }
+
+  /**
+   * Clear energy history on Hunonic Cloud (DELETE /hun-api/atmwifi/clear-history/:root_id)
+   */
+  async clearHistoryPower(rootId: string): Promise<boolean> {
+    const res = await this.request<{ status: boolean; message: string; data?: any }>(
+      `/hun-api/atmwifi/clear-history/${encodeURIComponent(rootId)}`,
+      {
+        method: 'DELETE',
+      }
+    );
+    return !!res.status;
+  }
 }
 
 export function createHunonicClient(token?: string): HunonicApiClient {

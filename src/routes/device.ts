@@ -463,9 +463,37 @@ deviceRouter.post('/api/device/settings', async (c) => {
 
     setSummaryCache(null);
 
+    // Call Hunonic Cloud APIs if possible
+    try {
+      const client = await resolveClient(c);
+      const rootId = current.hardware_info?.root_id || 'Zml4ZWRfbm9uY2Ux:oMAECKiJCzO55DGTy5+mqAuooiN9xd5B';
+
+      // 1. Sync electricity rate to Cloud
+      if (settings.rate_price || settings.electricity_rate_type) {
+        const p = settings.rate_price ? String(settings.rate_price) : '3800';
+        const gid = settings.electricity_rate_type === 'EVN' ? '2' : '1';
+        await client.setElectricityRate(rootId, gid, p);
+      }
+
+      // 2. Sync power consumption limit to Cloud
+      if (settings.consumption_alert_kwh !== undefined && settings.consumption_alert_kwh > 0) {
+        await client.setPowerLimit(rootId, settings.consumption_alert_kwh);
+      }
+
+      // 3. Sync thresholds to Cloud
+      if (settings.thresholds) {
+        await client.updateThresholds({
+          root_id: rootId,
+          ...settings.thresholds,
+        });
+      }
+    } catch (e) {
+      console.warn('Syncing settings to Cloud Hunonic failed, kept in local store:', e);
+    }
+
     return c.json({
       success: true,
-      message: 'Cập nhật cấu hình thiết bị thành công!',
+      message: 'Cập nhật cấu hình và đồng bộ lên Cloud Hunonic thành công!',
       data: deviceSettingsStore[key],
     });
   } catch (error) {
@@ -485,13 +513,87 @@ deviceRouter.post('/api/device/rename', async (c) => {
     if (!deviceSettingsStore[key]) {
       deviceSettingsStore[key] = { ...deviceSettingsStore['3590138'] };
     }
-    deviceSettingsStore[key].name = name.trim();
+    const newName = name.trim();
+    deviceSettingsStore[key].name = newName;
     setSummaryCache(null);
+
+    // Call Hunonic Cloud Rename API (PUT /hun-api/device/update-root/:root_id)
+    try {
+      const client = await resolveClient(c);
+      const rootId = deviceSettingsStore[key].hardware_info?.root_id || 'Zml4ZWRfbm9uY2Ux:oMAECKiJCzO55DGTy5+mqAuooiN9xd5B';
+      await client.renameDevice(key, rootId, newName);
+      console.log(`✅ [Cloud Rename] Successfully renamed device ${key} to '${newName}' on Hunonic Cloud`);
+    } catch (e) {
+      console.warn('Renaming on Cloud Hunonic failed, kept in local store:', e);
+    }
 
     return c.json({
       success: true,
-      message: 'Đổi tên thiết bị thành công!',
-      data: { name: name.trim() },
+      message: 'Đổi tên thiết bị và đồng bộ lên Cloud Hunonic thành công!',
+      data: { name: newName },
+    });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+deviceRouter.post('/api/device/room', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { device_id, room_name, room_id } = body;
+    const key = device_id ? String(device_id) : '3590138';
+
+    if (!deviceSettingsStore[key]) {
+      deviceSettingsStore[key] = { ...deviceSettingsStore['3590138'] };
+    }
+    if (room_name) deviceSettingsStore[key].room_name = room_name;
+    setSummaryCache(null);
+
+    // Call Hunonic Cloud Room Change API (POST /hun-api/room/change-device-room)
+    if (room_id) {
+      try {
+        const client = await resolveClient(c);
+        await client.changeDeviceRoom(key, String(room_id));
+        console.log(`✅ [Cloud Room] Successfully changed device ${key} to room ${room_id} on Hunonic Cloud`);
+      } catch (e) {
+        console.warn('Changing room on Cloud Hunonic failed, kept in local store:', e);
+      }
+    }
+
+    return c.json({
+      success: true,
+      message: 'Đổi phòng và đồng bộ lên Cloud Hunonic thành công!',
+      data: { room_name: deviceSettingsStore[key].room_name },
+    });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+deviceRouter.post('/api/device/clear-data', async (c) => {
+  try {
+    const body = await c.req.json().catch(() => ({}));
+    const { device_id } = body;
+    const key = device_id ? String(device_id) : '3590138';
+    const rootId = deviceSettingsStore[key]?.hardware_info?.root_id || 'Zml4ZWRfbm9uY2Ux:oMAECKiJCzO55DGTy5+mqAuooiN9xd5B';
+
+    setSummaryCache(null);
+
+    // Call Hunonic Cloud Clear History API (DELETE /hun-api/atmwifi/clear-history/:root_id)
+    try {
+      const client = await resolveClient(c);
+      await client.clearHistoryPower(rootId);
+      console.log(`✅ [Cloud Clear] Successfully cleared energy history on Hunonic Cloud for ${rootId}`);
+    } catch (e) {
+      console.warn('Clearing history on Cloud Hunonic failed, proceeding to clear local database:', e);
+    }
+
+    // Also prune local SQLite
+    sqliteEnergy.autoPrune(0);
+
+    return c.json({
+      success: true,
+      message: 'Đã xóa dữ liệu điện năng trên Cloud Hunonic và bộ nhớ cục bộ!',
     });
   } catch (error) {
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);

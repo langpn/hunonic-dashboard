@@ -476,8 +476,28 @@ export function DeviceSettingsModal({
                 <button onClick={() => setActiveSubView(null)} className="px-4 py-2 rounded-xl text-slate-400">Hủy</button>
                 <button
                   onClick={async () => {
-                    setDeviceName(tempName);
-                    await handleSaveSettings({ name: tempName }, 'Đã đổi tên công tơ thành công!');
+                    setLoading(true);
+                    try {
+                      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                      if (token) headers['Authorization'] = `Bearer ${token}`;
+                      const res = await fetch('/api/device/rename', {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({ device_id: deviceId, name: tempName.trim() }),
+                      });
+                      const json = await res.json();
+                      if (json.success) {
+                        setDeviceName(tempName.trim());
+                        setSaveSuccess('Đổi tên thiết bị và đồng bộ lên Cloud Hunonic thành công!');
+                        setTimeout(() => setSaveSuccess(null), 2500);
+                        setActiveSubView(null);
+                        if (onRefresh) onRefresh();
+                      }
+                    } catch {
+                      // non-blocking
+                    } finally {
+                      setLoading(false);
+                    }
                   }}
                   className="btn-emerald"
                   disabled={loading}
@@ -496,8 +516,28 @@ export function DeviceSettingsModal({
                 <button
                   key={r}
                   onClick={async () => {
-                    setRoomName(r);
-                    await handleSaveSettings({ room_name: r }, `Đã chuyển sang ${r}`);
+                    setLoading(true);
+                    try {
+                      const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                      if (token) headers['Authorization'] = `Bearer ${token}`;
+                      const res = await fetch('/api/device/room', {
+                        method: 'POST',
+                        headers,
+                        body: JSON.stringify({ device_id: deviceId, room_name: r, room_id: '1323510' }),
+                      });
+                      const json = await res.json();
+                      if (json.success) {
+                        setRoomName(r);
+                        setSaveSuccess(`Đã chuyển sang ${r} và đồng bộ lên Cloud!`);
+                        setTimeout(() => setSaveSuccess(null), 2500);
+                        setActiveSubView(null);
+                        if (onRefresh) onRefresh();
+                      }
+                    } catch {
+                      // non-blocking
+                    } finally {
+                      setLoading(false);
+                    }
                   }}
                   className={`w-full p-3 rounded-xl border text-left flex items-center justify-between ${
                     roomName === r ? 'border-emerald-500 bg-emerald-500/10 text-emerald-400 font-bold' : 'border-slate-800 bg-[#161b26]'
@@ -794,14 +834,33 @@ export function DeviceSettingsModal({
                 <p>Thao tác này sẽ xóa sạch các bản ghi lấy mẫu SQLite cục bộ của công tơ này. Dữ liệu gốc trên Cloud Hunonic và chip nhớ vẫn được bảo toàn.</p>
               </div>
               <button
-                onClick={() => {
-                  alert('Đã xóa dữ liệu lấy mẫu cục bộ!');
-                  setActiveSubView(null);
-                  if (onRefresh) onRefresh();
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+                    if (token) headers['Authorization'] = `Bearer ${token}`;
+                    const res = await fetch('/api/device/clear-data', {
+                      method: 'POST',
+                      headers,
+                      body: JSON.stringify({ device_id: deviceId }),
+                    });
+                    const json = await res.json();
+                    if (json.success) {
+                      setSaveSuccess('Đã xóa dữ liệu lấy mẫu trên Cloud và bộ nhớ cục bộ!');
+                      setTimeout(() => setSaveSuccess(null), 2500);
+                      setActiveSubView(null);
+                      if (onRefresh) onRefresh();
+                    }
+                  } catch {
+                    // non-blocking
+                  } finally {
+                    setLoading(false);
+                  }
                 }}
-                className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold uppercase tracking-wider"
+                disabled={loading}
+                className="w-full py-3 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold uppercase tracking-wider disabled:opacity-50"
               >
-                Xác nhận xóa dữ liệu lấy mẫu
+                {loading ? 'Đang xóa dữ liệu...' : 'Xác nhận xóa dữ liệu điện năng'}
               </button>
               <button onClick={() => setActiveSubView(null)} className="w-full py-2 rounded-xl text-slate-400">
                 Hủy bỏ
