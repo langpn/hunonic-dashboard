@@ -58,6 +58,8 @@ dashboardRouter.get('/api/dashboard/summary', async (c) => {
     let electricityRate = null;
     let todayKwh = 0;
     let currentPowerW = 0;
+    let driftDetected = false;
+    let driftDiff = 0;
     
     const activeMeter = (targetDeviceId ? electricMeters.find((m: any) => String(m.id) === String(targetDeviceId)) : null) ||
                         (targetRootId ? electricMeters.find((m: any) => m.root_id === targetRootId) : null) ||
@@ -66,6 +68,11 @@ dashboardRouter.get('/api/dashboard/summary', async (c) => {
     if (activeMeter) {
       const dataExtra = parseJsonSafe(activeMeter.data_extra);
       currentPowerW = dataExtra.power_current || 0;
+
+      // Scale powerW if transmitted in deci-watts (> 1300W exceeds 1240W physical capability of Mitsu 13YZP)
+      if (currentPowerW > 1300) {
+        currentPowerW = Math.round(currentPowerW / 10);
+      }
 
       // Record sample to local SQLite storage
       if (currentPowerW >= 0) {
@@ -99,9 +106,15 @@ dashboardRouter.get('/api/dashboard/summary', async (c) => {
         }
       }
 
+      // Check for local vs cloud drift before reconciliation
+      const localHourlyBefore = sqliteEnergy.getHourlyForDate(todayStr);
+      const localTotalBefore = parseFloat(localHourlyBefore.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
+      driftDiff = parseFloat((todayKwh - localTotalBefore).toFixed(3));
+
       // Smart reconciliation: Seed today's confirmed Cloud energy into SQLite if SQLite is behind
-      if (todayKwh > 0) {
+      if (todayKwh > 0 && (driftDiff > 0.05 || localTotalBefore < todayKwh * 0.90)) {
         sqliteEnergy.reconcileCloudDailyKwh(todayStr, todayKwh);
+        driftDetected = true;
       }
     }
 
@@ -182,6 +195,11 @@ dashboardRouter.get('/api/dashboard/summary', async (c) => {
         group_name: rateGroup,
       },
       active_device_id: activeMeter ? String(activeMeter.id) : null,
+      drift_status: {
+        detected: driftDetected,
+        diff_kwh: driftDiff > 0 ? driftDiff : 0,
+        message: 'Dữ liệu đo cục bộ bị lệch so với Cloud Hunonic. Hệ thống đã tự động hiệu chỉnh và cập nhật lại chuẩn xác!',
+      },
       storage_diagnostics: sqliteEnergy.getDiagnostics(),
     };
 

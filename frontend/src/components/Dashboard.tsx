@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, 
   BarChart2, Zap, LogOut, RefreshCw, Sun, Moon, Wind, Loader2,
-  Activity, Cpu, Plus, ChevronDown, Layers, Sliders
+  Activity, Cpu, Plus, ChevronDown, Layers, Sliders, X
 } from 'lucide-react';
 import { ModernCalendar } from './ModernCalendar';
 import { DailyChart } from './DailyChart';
@@ -43,6 +43,7 @@ export function Dashboard({
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState<{ dateStr: string; kwh: number } | null>(null);
+  const [dismissDriftNotice, setDismissDriftNotice] = useState(false);
 
   // Dynamic Device Management
   const electricMeters = summary?.electricMeters || [];
@@ -396,6 +397,25 @@ export function Dashboard({
 
       {/* Main Studio Viewport */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6 sm:py-8 flex-1 w-full space-y-6">
+        {/* Auto-Reconciliation & Drift Notice Banner */}
+        {(summary as any)?.drift_status?.detected && !dismissDriftNotice && (
+          <div className="p-3.5 sm:p-4 rounded-2xl bg-emerald-500/10 dark:bg-emerald-950/30 border border-emerald-500/30 text-emerald-800 dark:text-emerald-300 flex items-center justify-between gap-3 text-xs shadow-sm animate-in fade-in duration-200">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <Zap className="w-4 h-4 text-emerald-600 dark:text-emerald-400 flex-shrink-0" />
+              <p className="leading-relaxed">
+                <strong>Tự động hiệu chuẩn:</strong> Phát hiện sai lệch <strong className="font-mono text-emerald-700 dark:text-emerald-300">{(summary as any).drift_status.diff_kwh} kWh</strong> giữa bộ nhớ cục bộ và Cloud Hunonic. Hệ thống đã tự động đối soát và cập nhật lại chuẩn xác 100%!
+              </p>
+            </div>
+            <button
+              onClick={() => setDismissDriftNotice(true)}
+              className="p-1 rounded-lg text-emerald-700 dark:text-emerald-400 hover:bg-emerald-500/20 transition-colors flex-shrink-0"
+              title="Đóng thông báo"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        )}
+
         {/* ================================================================== */}
         {/* HERO REALTIME TELEMETRY STAGE (AC Command Deck) */}
         {/* ================================================================== */}

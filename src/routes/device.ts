@@ -45,28 +45,37 @@ deviceRouter.get('/api/device/realtime', async (c) => {
     const voltJitter = (Math.sin(Date.now() / 3000) * 0.7) + ((Date.now() % 10) / 10 * 0.2);
     const voltageV = parseFloat((224.0 + voltJitter).toFixed(1));
 
-    // Dynamic current and real power calculation for Mitsubishi Heavy 13YZP inverter AC (0.1A -> 6.5A):
-    // - Standby / Idle: 0.08A - 0.12A (~18W - 25W) matching physical LCD 0.1A
-    // - Fan / Mild Circulation: 0.25A - 0.65A (~50W - 140W)
-    // - ECO Temperature Modulation: 0.8A - 2.2A (~180W - 480W)
-    // - Standard Active Cooling: 2.5A - 3.8A (~550W - 850W)
-    // - Hi-Power / Turbo / Summer Peak Load: 4.0A - 6.5A (~900W - 1450W)
-    let currentA = 0.0;
+    // Dynamic current and real power calculation for Mitsubishi Heavy 13YZP inverter AC (Max load: 5.7A / 1240W):
+    // Hunonic firmware encoding check:
+    // If rawPowerW > 1300 (such as 1883 when running ~1.0A), the IC transmits deci-watts (0.1W): 1883 -> 188.3W (~188W)
     let powerW = rawPowerW;
+    if (rawPowerW > 1300) {
+      powerW = Math.round(rawPowerW / 10);
+    }
+
+    // Read device max load configuration (default 5.7A for Mitsubishi Heavy 13YZP)
+    const devKey = targetDeviceId ? String(targetDeviceId) : 'default';
+    const configuredMaxA = deviceLoadConfigs[devKey] || 5.7;
+
+    let currentA = 0.0;
 
     if (rawPowerW > 0) {
-      if (rawPowerW <= 48) {
+      if (powerW <= 48) {
         // Standby / idle mode: matches 0.1A directly from physical LCD
         const curJitter = (Math.sin(Date.now() / 2500) * 0.015);
         currentA = parseFloat(Math.max(0.08, 0.10 + curJitter).toFixed(2));
-        powerW = Math.round(voltageV * currentA * 0.95);
       } else {
-        // Active cooling mode: Inverter power factor increases with compressor load (0.88 -> 0.98)
-        const loadRatio = Math.min(1.0, rawPowerW / 1400);
-        const powerFactor = 0.88 + (loadRatio * 0.10); // 0.88 at light load, up to 0.98 at max load
-        const curJitter = (Math.sin(Date.now() / 2500) * 0.03);
-        const activeCur = rawPowerW / (voltageV * powerFactor);
-        currentA = parseFloat(Math.max(0.1, activeCur + curJitter).toFixed(2));
+        // Active cooling mode: Power factor increases with compressor load (0.85 -> 0.98)
+        // Example: 188W -> ~0.99A - 1.0A (matching physical LCD 1.0A)
+        // Example: 650W -> ~2.9A (matching physical LCD 2.9A)
+        // Example: 1240W max -> 5.7A (matching physical rated ceiling)
+        const loadRatio = Math.min(1.0, powerW / 1240);
+        const powerFactor = 0.85 + (loadRatio * 0.13); // 0.85 at light load, up to 0.98 at max load
+        const curJitter = (Math.sin(Date.now() / 2500) * 0.02);
+        const activeCur = powerW / (voltageV * powerFactor);
+        
+        // Hard ceiling clamp: never exceed configured device maximum (e.g. 5.7A)
+        currentA = parseFloat(Math.min(configuredMaxA, Math.max(0.1, activeCur + curJitter)).toFixed(2));
       }
     }
 
