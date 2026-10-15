@@ -11,7 +11,8 @@ import { cors } from 'hono/cors';
 import { logger } from 'hono/logger';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { createHunonicClient, HunonicApiClient, HunonicAuthError, type Device, type Home } from './lib/hunonic-api.js';
-import { hourlyStorage } from './lib/hourly-storage.js';
+import { sqliteEnergy } from './lib/sqlite-db.js';
+import { lanBridge } from './lib/lan-bridge.js';
 
 const app = new Hono();
 
@@ -35,10 +36,11 @@ app.get('/health', (c) => c.json({
   memory: process.memoryUsage(),
 }));
 
-// Initialize Hunonic client singleton
+// Initialize Hunonic client singleton with Auto-Healing Session capability
 let hunonicClient: ReturnType<typeof createHunonicClient> | null = null;
 
 function getClient(c?: any) {
+  // If user passed a token in header, try using it
   if (c) {
     const authHeader = c.req.header('Authorization');
     if (authHeader && authHeader.startsWith('Bearer ')) {
@@ -48,6 +50,8 @@ function getClient(c?: any) {
       }
     }
   }
+
+  // Fallback to server daemon client with automatic background re-login
   if (!hunonicClient) {
     hunonicClient = createHunonicClient();
   }
@@ -110,7 +114,7 @@ app.get('/api/dashboard/summary', async (c) => {
     
     // 2. Fetch devices
     const devices = await client.getDevicesByHome(home.id);
-    const electricMeters = devices.filter(d => 
+    const electricMeters = devices.filter((d: any) => 
       d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi'
     );
     
@@ -125,9 +129,9 @@ app.get('/api/dashboard/summary', async (c) => {
       const dataExtra = parseJsonSafe(meter.data_extra);
       currentPowerW = dataExtra.power_current || 0;
 
-      // Record sample to local hourly storage using fluctuating power integration
+      // Record sample to local SQLite storage using fluctuating power integration
       if (currentPowerW >= 0) {
-        hourlyStorage.recordFluctuatingPower(meter.root_id, currentPowerW);
+        sqliteEnergy.recordFluctuatingPower(currentPowerW);
       }
 
       try {
@@ -146,11 +150,11 @@ app.get('/api/dashboard/summary', async (c) => {
       // Calculate today's kWh
       const todayStr = new Date().toISOString().slice(0, 10);
       if (monthData && Array.isArray(monthData.graph_data)) {
-        const todayPoint = monthData.graph_data.find(d => d.label === todayStr);
+        const todayPoint = monthData.graph_data.find((d: any) => d.label === todayStr);
         if (todayPoint) {
           todayKwh = todayPoint.value || 0;
         } else if (monthData.graph_data.length > 0) {
-          const nonZero = monthData.graph_data.filter(d => d.value > 0);
+          const nonZero = monthData.graph_data.filter((d: any) => d.value > 0);
           if (nonZero.length > 0) {
             todayKwh = nonZero[nonZero.length - 1].value;
           }
@@ -176,7 +180,7 @@ app.get('/api/dashboard/summary', async (c) => {
 
     // Today's hourly curve
     const todayDateStr = new Date().toISOString().slice(0, 10);
-    const hourlyData = hourlyStorage.getHourlyForDate(todayDateStr);
+    const hourlyData = sqliteEnergy.getHourlyForDate(todayDateStr);
 
     const responseData = {
       home: {
@@ -184,7 +188,7 @@ app.get('/api/dashboard/summary', async (c) => {
         name: home.name,
         timezone: home.timezone,
       },
-      electricMeters: electricMeters.map(m => {
+      electricMeters: electricMeters.map((m: any) => {
         const dataExtra = parseJsonSafe(m.data_extra);
         const rootExtra = parseJsonSafe(m.root_extra);
         return {
@@ -203,7 +207,7 @@ app.get('/api/dashboard/summary', async (c) => {
           root_extra: rootExtra,
         };
       }),
-      allDevices: devices.map(d => ({
+      allDevices: devices.map((d: any) => ({
         id: d.id,
         name: d.name,
         root_id: d.root_id,
@@ -225,7 +229,7 @@ app.get('/api/dashboard/summary', async (c) => {
         total_price: monthData.total_price,
         first_power: monthData.first_power,
         last_power: monthData.last_power,
-        daily_data: monthData.graph_data.map(d => ({
+        daily_data: monthData.graph_data.map((d: any) => ({
           date: d.label,
           kwh: d.value,
           solar: d.solar || 0,
@@ -235,7 +239,7 @@ app.get('/api/dashboard/summary', async (c) => {
         price: ratePrice,
         group_name: rateGroup,
       },
-      storage_diagnostics: hourlyStorage.getDiagnostics(),
+      storage_diagnostics: sqliteEnergy.getDiagnostics(),
     };
 
     summaryCache = {
@@ -265,7 +269,7 @@ app.get('/api/device/realtime', async (c) => {
   try {
     const client = getClient(c);
     const devices = await client.getDevicesByHome();
-    const meter = devices.find(d => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
+    const meter = devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
     if (!meter) {
       return c.json({ success: false, error: 'Không tìm thấy công tơ điện!' }, 404);
     }
@@ -279,7 +283,7 @@ app.get('/api/device/realtime', async (c) => {
 
     // Mathematically integrate fluctuating power into hourly bucket
     if (powerW >= 0) {
-      hourlyStorage.recordFluctuatingPower(meter.root_id, powerW);
+      sqliteEnergy.recordFluctuatingPower(powerW);
     }
 
     return c.json({
@@ -313,7 +317,7 @@ app.get('/api/dashboard/history', async (c) => {
     const type = c.req.query('type') || 'year';
     const client = getClient(c);
     const devices = await client.getDevicesByHome();
-    const meter = devices.find(d => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
+    const meter = devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
     if (!meter) {
       return c.json({ success: false, error: 'Không tìm thấy công tơ điện!' }, 404);
     }
@@ -342,7 +346,7 @@ app.get('/api/dashboard/history', async (c) => {
 
     if (type === 'day') {
       const date = c.req.query('date') || new Date().toISOString().slice(0, 10);
-      const hourly = hourlyStorage.getHourlyForDate(date, meter.root_id);
+      const hourly = sqliteEnergy.getHourlyForDate(date);
       const localTotalKwh = parseFloat(hourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
       const hasLocalData = hourly.some(r => r.kwh > 0 || r.avg_power_w > 0);
 
@@ -397,8 +401,7 @@ app.get('/api/dashboard/history', async (c) => {
 app.get('/api/dashboard/hourly', (c) => {
   try {
     const date = c.req.query('date') || new Date().toISOString().slice(0, 10);
-    const rootId = c.req.query('root_id');
-    const records = hourlyStorage.getHourlyForDate(date, rootId);
+    const records = sqliteEnergy.getHourlyForDate(date);
 
     const totalKwh = parseFloat(records.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
     const peakRecord = records.reduce((max, r) => (r.avg_power_w > max.avg_power_w ? r : max), records[0] || { hour: 0, avg_power_w: 0 });
@@ -427,19 +430,19 @@ app.get('/api/system/status', (c) => {
     success: true,
     data: {
       uptime: Math.round(process.uptime()),
-      diagnostics: hourlyStorage.getDiagnostics(),
+      diagnostics: sqliteEnergy.getDiagnostics(),
     },
   });
 });
 
 app.post('/api/system/prune', (c) => {
   try {
-    const result = hourlyStorage.autoPrune(true);
+    const result = sqliteEnergy.autoPrune(30);
     return c.json({
       success: true,
       message: `Pruning completed: removed ${result.prunedCount} samples`,
       data: result,
-      diagnostics: hourlyStorage.getDiagnostics(),
+      diagnostics: sqliteEnergy.getDiagnostics(),
     });
   } catch (error) {
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
@@ -490,17 +493,17 @@ app.post('/api/device/thresholds', async (c) => {
 app.use('/*', serveStatic({ root: './frontend/dist' }));
 app.get('*', serveStatic({ path: './frontend/dist/index.html' }));
 
-// Background auto-sampler: integrate fluctuating power every 20 seconds (Zero Waste)
+// Background auto-sampler: integrate fluctuating power into SQLite every 20 seconds (Zero Waste)
 setInterval(async () => {
   try {
     const client = getClient();
     const devices = await client.getDevicesByHome();
-    const meter = devices.find(d => d.root_type === 'elmeter' || d.root_type === 'ekmeter');
+    const meter = devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter');
     if (meter) {
       const dataExtra = parseJsonSafe(meter.data_extra);
       const powerW = dataExtra.power_current;
       if (typeof powerW === 'number' && powerW >= 0) {
-        hourlyStorage.recordFluctuatingPower(meter.root_id, powerW);
+        sqliteEnergy.recordFluctuatingPower(powerW);
       }
     }
   } catch {
