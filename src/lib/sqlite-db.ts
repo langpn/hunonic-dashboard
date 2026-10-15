@@ -22,6 +22,21 @@ export interface HourlyBucketRecord {
 const DATA_DIR = path.resolve(process.cwd(), 'data');
 const DB_FILE = path.join(DATA_DIR, 'energy.sqlite');
 
+/**
+ * Get date string (YYYY-MM-DD) and hour (0-23) in Vietnam timezone (GMT+7)
+ */
+export function getVnTimeParts(dateObj = new Date()) {
+  const vnDateFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+  const dateStr = vnDateFormatter.format(dateObj); // YYYY-MM-DD
+  const vnHourFormatter = new Intl.DateTimeFormat('en-US', {
+    timeZone: 'Asia/Ho_Chi_Minh',
+    hour: 'numeric',
+    hour12: false,
+  });
+  const hour = parseInt(vnHourFormatter.format(dateObj), 10) % 24;
+  return { dateStr, hour };
+}
+
 class SqliteEnergyEngine {
   private db: DatabaseSync;
   private lastPruneTime: number = 0;
@@ -60,12 +75,11 @@ class SqliteEnergyEngine {
   }
 
   /**
-   * Trapezoidal energy integration into SQLite bucket
+   * Trapezoidal energy integration into SQLite bucket with VN timezone
    */
   public recordFluctuatingPower(currentPowerW: number): void {
     const now = new Date();
-    const dateStr = now.toISOString().slice(0, 10);
-    const hour = now.getHours();
+    const { dateStr, hour } = getVnTimeParts(now);
     const nowMs = now.getTime();
     const safeW = Math.max(0, currentPowerW);
 
@@ -105,6 +119,59 @@ class SqliteEnergyEngine {
     // Auto-prune periodically (every 12 hours)
     if (Date.now() - this.lastPruneTime > 12 * 60 * 60 * 1000) {
       this.autoPrune();
+    }
+  }
+
+  /**
+   * Reconcile confirmed daily kWh from Hunonic Cloud with local hourly buckets
+   * Ensures the 24-hour chart is NEVER empty when Cloud has confirmed usage!
+   */
+  public reconcileCloudDailyKwh(dateStr: string, cloudTotalKwh: number): void {
+    if (!cloudTotalKwh || cloudTotalKwh <= 0) return;
+
+    const { dateStr: todayStr, hour: currentVnHour } = getVnTimeParts();
+    const isToday = dateStr === todayStr;
+
+    // Check current local accumulated kWh for this date
+    const sumStmt = this.db.prepare('SELECT SUM(kwh) as total, COUNT(*) as count FROM hourly_buckets WHERE date = ? AND kwh > 0');
+    const res = sumStmt.get(dateStr) as any;
+    const localTotal = res?.total || 0;
+
+    // If local data is already tracking within 10% of cloud, don't overwrite
+    if (localTotal >= cloudTotalKwh * 0.90) return;
+
+    const missingKwh = parseFloat((cloudTotalKwh - localTotal).toFixed(3));
+    if (missingKwh <= 0.005) return;
+
+    // Determine target hours to allocate missing energy based on AC usage pattern:
+    // Typical Inverter AC profile: Heavy night cooling (22h - 06h), afternoon cooling (12h - 15h)
+    let candidateHours: number[] = [];
+    if (isToday) {
+      // Allocate only across elapsed hours up to now
+      const maxH = Math.max(1, currentVnHour);
+      candidateHours = Array.from({ length: maxH }, (_, i) => i);
+    } else {
+      // Past day: Night sleep (0-6h, 21-23h) and Afternoon (12-15h)
+      candidateHours = [0, 1, 2, 3, 4, 5, 6, 12, 13, 14, 21, 22, 23];
+    }
+
+    if (candidateHours.length === 0) return;
+
+    const kwhPerHour = parseFloat((missingKwh / candidateHours.length).toFixed(4));
+    const avgPowerW = Math.max(30, Math.round(kwhPerHour * 1000));
+
+    const upsertStmt = this.db.prepare(`
+      INSERT INTO hourly_buckets (date, hour, kwh, avg_power_w, min_power_w, max_power_w, samples_count, last_w, last_time)
+      VALUES (?, ?, ?, ?, ?, ?, 60, ?, ?)
+      ON CONFLICT(date, hour) DO UPDATE SET
+        kwh = kwh + excluded.kwh,
+        avg_power_w = CASE WHEN avg_power_w <= 0 THEN excluded.avg_power_w ELSE (avg_power_w + excluded.avg_power_w) / 2 END,
+        max_power_w = MAX(max_power_w, excluded.max_power_w)
+    `);
+
+    const nowMs = Date.now();
+    for (const h of candidateHours) {
+      upsertStmt.run(dateStr, h, kwhPerHour, avgPowerW, 20, Math.round(avgPowerW * 1.5), avgPowerW, nowMs);
     }
   }
 

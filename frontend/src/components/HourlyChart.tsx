@@ -173,7 +173,10 @@ export function HourlyChart({
           <div className="relative pt-4 pb-2">
             <div className="h-56 w-full flex items-end gap-1 sm:gap-2 px-1">
               {hoursList.map((item) => {
-                const heightPercent = Math.max(6, Math.min(100, Math.round((item.avg_power_w / maxPowerW) * 100)));
+                const hasPower = item.avg_power_w > 0 || item.kwh > 0;
+                const heightPercent = hasPower
+                  ? Math.max(8, Math.min(100, Math.round((item.avg_power_w / maxPowerW) * 100)))
+                  : 4;
                 const isHovered = hoveredHour?.hour === item.hour;
                 const isPeak = item.hour === peakPoint.hour && peakPoint.avg_power_w > 0;
 
@@ -195,18 +198,20 @@ export function HourlyChart({
                     <div
                       style={{ height: `${heightPercent}%` }}
                       className={`w-full rounded-t transition-all duration-150 ${
-                        isPeak
-                          ? 'bg-[#EF4444]'
+                        !hasPower
+                          ? 'bg-slate-200/70 dark:bg-slate-800/40 group-hover:bg-slate-300 dark:group-hover:bg-slate-700'
+                          : isPeak
+                          ? 'bg-[#EF4444] shadow-sm shadow-rose-500/20'
                           : isHovered
-                          ? 'bg-[#00B33D] dark:bg-[#10B981] shadow-sm'
-                          : 'bg-[#00B33D]/30 dark:bg-[#10B981]/25 group-hover:bg-[#00B33D]/60'
+                          ? 'bg-emerald-500 shadow-sm'
+                          : 'bg-emerald-500/80 dark:bg-emerald-400/80 group-hover:bg-emerald-500'
                       }`}
                     />
 
                     {/* X-axis label */}
                     <span className={`text-[9px] sm:text-[10px] mt-2 font-mono transition-colors ${
                       isHovered 
-                        ? 'text-[#00B33D] dark:text-[#10B981] font-bold' 
+                        ? 'text-emerald-500 font-bold' 
                         : isPeak 
                         ? 'text-[#EF4444] font-bold' 
                         : 'text-slate-400 dark:text-slate-500'
