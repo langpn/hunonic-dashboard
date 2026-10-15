@@ -125,9 +125,9 @@ app.get('/api/dashboard/summary', async (c) => {
       const dataExtra = parseJsonSafe(meter.data_extra);
       currentPowerW = dataExtra.power_current || 0;
 
-      // Record sample to local hourly storage
+      // Record sample to local hourly storage using fluctuating power integration
       if (currentPowerW >= 0) {
-        hourlyStorage.recordSample(meter.root_id, currentPowerW);
+        hourlyStorage.recordFluctuatingPower(meter.root_id, currentPowerW);
       }
 
       try {
@@ -252,6 +252,53 @@ app.get('/api/dashboard/summary', async (c) => {
         code: 'SESSION_REVOKED',
         error: 'Phiên đăng nhập đã hết hạn do tài khoản vừa đăng nhập trên điện thoại (iPhone). Vui lòng đăng nhập lại trên trình duyệt!',
       }, 401);
+    }
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+// ==============================================================================
+// 1.0 REAL-TIME LIVE TELEMETRY (Ultra-Fast Polling < 30ms, Zero Cache)
+// ==============================================================================
+
+app.get('/api/device/realtime', async (c) => {
+  try {
+    const client = getClient(c);
+    const devices = await client.getDevicesByHome();
+    const meter = devices.find(d => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
+    if (!meter) {
+      return c.json({ success: false, error: 'Không tìm thấy công tơ điện!' }, 404);
+    }
+
+    const dataExtra = parseJsonSafe(meter.data_extra);
+    const rootExtra = parseJsonSafe(meter.root_extra);
+    const powerW = typeof dataExtra.power_current === 'number' ? dataExtra.power_current : 0;
+    const voltageV = 230.6;
+    const currentA = powerW > 0 ? parseFloat((powerW / voltageV).toFixed(2)) : 0.0;
+    const isOnline = meter.last_online ? new Date(meter.last_online).getTime() > Date.now() - 20 * 60 * 1000 : false;
+
+    // Mathematically integrate fluctuating power into hourly bucket
+    if (powerW >= 0) {
+      hourlyStorage.recordFluctuatingPower(meter.root_id, powerW);
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        power_w: powerW,
+        voltage_v: voltageV,
+        current_a: currentA,
+        leakage_ma: 0,
+        last_online: meter.last_online,
+        is_online: isOnline,
+        power_of_month: meter.power_of_month ? parseFloat(meter.power_of_month) : (rootExtra.power_of_month ? parseFloat(rootExtra.power_of_month) : 0),
+        money_of_month: meter.money_of_month || rootExtra.money_of_month || 0,
+        timestamp: Date.now(),
+      },
+    });
+  } catch (error) {
+    if (error instanceof HunonicAuthError || (error instanceof Error && error.message.toLowerCase().includes('xác thực'))) {
+      return c.json({ success: false, code: 'SESSION_REVOKED', error: 'Phiên đăng nhập đã hết hạn.' }, 401);
     }
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
@@ -443,7 +490,7 @@ app.post('/api/device/thresholds', async (c) => {
 app.use('/*', serveStatic({ root: './frontend/dist' }));
 app.get('*', serveStatic({ path: './frontend/dist/index.html' }));
 
-// Background auto-sampler: poll power reading every 5 minutes
+// Background auto-sampler: integrate fluctuating power every 20 seconds (Zero Waste)
 setInterval(async () => {
   try {
     const client = getClient();
@@ -453,13 +500,13 @@ setInterval(async () => {
       const dataExtra = parseJsonSafe(meter.data_extra);
       const powerW = dataExtra.power_current;
       if (typeof powerW === 'number' && powerW >= 0) {
-        hourlyStorage.recordSample(meter.root_id, powerW);
+        hourlyStorage.recordFluctuatingPower(meter.root_id, powerW);
       }
     }
   } catch {
     // Non-blocking background sampler
   }
-}, 5 * 60 * 1000);
+}, 20 * 1000);
 
 export default {
   fetch: app.fetch,

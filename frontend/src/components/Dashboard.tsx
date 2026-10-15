@@ -115,11 +115,53 @@ export function Dashboard({
   const firstPower = activeMonthData?.first_power ?? 324.6;
   const lastPower = activeMonthData?.last_power ?? (firstPower + totalKwh);
 
-  // Realtime Telemetry from EKMeter
-  const powerW = today.power_current_w || meter?.power_current || 4.6;
-  const voltageV = 230.6;
-  const currentA = powerW > 0 ? parseFloat((powerW / voltageV).toFixed(1)) : 0.1;
-  const leakageMa = 0;
+  // Live Real-Time Telemetry State (Fluctuates constantly in real time)
+  const [liveTelemetry, setLiveTelemetry] = useState({
+    powerW: today.power_current_w || meter?.power_current || 48,
+    voltageV: 230.6,
+    currentA: (today.power_current_w || meter?.power_current || 48) > 0 ? parseFloat(((today.power_current_w || meter?.power_current || 48) / 230.6).toFixed(2)) : 0.2,
+    leakageMa: 0,
+    isOnline: isOnline,
+    lastUpdateMs: Date.now(),
+  });
+
+  // Auto-poll live power every 3.5 seconds
+  useEffect(() => {
+    let mounted = true;
+    const fetchLive = async () => {
+      try {
+        const headers: Record<string, string> = {};
+        if (token) headers['Authorization'] = `Bearer ${token}`;
+
+        const res = await fetch('/api/device/realtime', { headers });
+        const json = await res.json();
+        if (mounted && json.success && json.data) {
+          setLiveTelemetry({
+            powerW: json.data.power_w,
+            voltageV: json.data.voltage_v || 230.6,
+            currentA: json.data.current_a || 0.2,
+            leakageMa: json.data.leakage_ma || 0,
+            isOnline: json.data.is_online,
+            lastUpdateMs: Date.now(),
+          });
+        }
+      } catch {
+        // Non-blocking silent retry
+      }
+    };
+
+    const interval = setInterval(fetchLive, 3500);
+    return () => {
+      mounted = false;
+      clearInterval(interval);
+    };
+  }, [token]);
+
+  // Realtime Telemetry from live state
+  const powerW = liveTelemetry.powerW;
+  const voltageV = liveTelemetry.voltageV;
+  const currentA = liveTelemetry.currentA;
+  const leakageMa = liveTelemetry.leakageMa;
 
   // AC Operating State
   let acStatus = {
@@ -358,7 +400,8 @@ export function Dashboard({
                 )}
 
                 <div className="flex items-center justify-center gap-2">
-                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border ${acStatus.badge}`}>
+                  <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-semibold border flex items-center gap-1.5 ${acStatus.badge}`}>
+                    <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                     {acStatus.label}
                   </span>
                 </div>
