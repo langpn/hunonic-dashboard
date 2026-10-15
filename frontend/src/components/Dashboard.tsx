@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { 
   ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, 
   BarChart2, Zap, LogOut, RefreshCw, Sun, Moon, Wind, Loader2,
@@ -211,11 +211,31 @@ export function Dashboard({
     fetchMonthData(nextYear, nextMonth);
   };
 
-  // Metrics from API
-  const totalKwh = activeMonthData?.total_power ?? meter?.power_of_month ?? 36.27;
-  const totalPrice = activeMonthData?.total_price ?? meter?.money_of_month ?? Math.round(totalKwh * ratePrice);
+  // Dynamically synchronize liveTodayKwh into activeMonthData.daily_data so today's cell and total match 100%
+  const syncedDailyData = useMemo(() => {
+    const base = activeMonthData?.daily_data || [];
+    if (!base.some((d: any) => d.date === todayStr)) {
+      return [...base, { date: todayStr, kwh: liveTodayKwh, solar: 0 }];
+    }
+    return base.map((d: any) => {
+      if (d.date === todayStr) {
+        return { ...d, kwh: liveTodayKwh };
+      }
+      return d;
+    });
+  }, [activeMonthData, todayStr, liveTodayKwh]);
+
+  const syncedMonthTotalKwh = useMemo(() => {
+    if (!syncedDailyData.length) return (activeMonthData?.total_power ?? meter?.power_of_month ?? 36.27);
+    const sumDays = syncedDailyData.reduce((acc: number, d: any) => acc + (d.kwh || 0), 0);
+    return parseFloat(sumDays.toFixed(2));
+  }, [syncedDailyData, activeMonthData, meter]);
+
+  // Metrics from API & Live Real-time Sync
+  const totalKwh = syncedMonthTotalKwh;
+  const totalPrice = Math.round(totalKwh * ratePrice);
   const firstPower = activeMonthData?.first_power ?? 324.6;
-  const lastPower = activeMonthData?.last_power ?? (firstPower + totalKwh);
+  const lastPower = parseFloat((firstPower + totalKwh).toFixed(2));
 
   const powerW = liveTelemetry.powerW;
   const voltageV = liveTelemetry.voltageV;
@@ -761,16 +781,17 @@ export function Dashboard({
                 <ModernCalendar
                   year={currentYear}
                   month={currentMonthNum}
-                  dailyData={activeMonthData?.daily_data || []}
+                  dailyData={syncedDailyData}
                   ratePrice={ratePrice}
                   selectedDate={selectedDate}
+                  todayKwh={liveTodayKwh}
                   onSelectDate={(dateStr, kwh) => {
                     setSelectedDate(dateStr);
                     setSelectedDayDetail({ dateStr, kwh });
                   }}
                 />
               ) : (
-                <DailyChart data={activeMonthData?.daily_data || []} ratePrice={ratePrice} />
+                <DailyChart data={syncedDailyData} ratePrice={ratePrice} />
               )}
             </div>
           </div>

@@ -11,6 +11,7 @@ interface ModernCalendarProps {
   dailyData: DayUsage[];
   ratePrice?: number;
   selectedDate?: string;
+  todayKwh?: number;
   onSelectDate?: (dateStr: string, kwh: number) => void;
 }
 
@@ -20,18 +21,23 @@ export function ModernCalendar({
   dailyData = [],
   ratePrice = 3800,
   selectedDate,
+  todayKwh,
   onSelectDate,
 }: ModernCalendarProps) {
   const [hoveredCell, setHoveredCell] = useState<{ dateStr: string; kwh: number; day: number } | null>(null);
 
-  // Map data by day string for fast lookup
+  // Map data by day string for fast lookup, with today synced live
   const usageMap = useMemo(() => {
     const map = new Map<string, number>();
     for (const d of dailyData) {
       map.set(d.date, d.kwh);
     }
+    if (todayKwh !== undefined && todayKwh > 0) {
+      const todayIsoStr = new Date().toISOString().slice(0, 10);
+      map.set(todayIsoStr, todayKwh);
+    }
     return map;
-  }, [dailyData]);
+  }, [dailyData, todayKwh]);
 
   const maxKwhInMonth = useMemo(() => {
     const vals = dailyData.map(d => d.kwh).filter(v => v > 0);
@@ -108,7 +114,7 @@ export function ModernCalendar({
     }
 
     return cells;
-  }, [year, month, usageMap, maxKwhInMonth]);
+  }, [year, month, usageMap, maxKwhInMonth, todayKwh]);
 
   const weekHeaders = [
     { label: 'T2', isSunday: false },
