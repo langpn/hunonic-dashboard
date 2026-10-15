@@ -72,7 +72,7 @@ export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme, sessionNoti
 
       {/* Main Login Card */}
       <div className="max-w-md w-full mx-auto my-auto py-8">
-        <div className="glass-card p-6 sm:p-8 space-y-6">
+        <div className="panel-card p-6 sm:p-8 space-y-6">
           <div className="text-center space-y-1.5">
             <h2 className="text-xl sm:text-2xl font-bold text-slate-900 dark:text-white tracking-tight">
               Đăng Nhập Tài Khoản
@@ -111,7 +111,7 @@ export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme, sessionNoti
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
                   placeholder="VD: 0353700780"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-medium outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#1a202c] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-medium outline-none focus:border-emerald-500 transition-colors"
                   required
                 />
               </div>
@@ -131,7 +131,7 @@ export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme, sessionNoti
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="Nhập mật khẩu app Hunonic"
-                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/80 border border-slate-200 dark:border-slate-800 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-medium outline-none focus:border-emerald-500 transition-colors"
+                  className="w-full pl-10 pr-3.5 py-2.5 rounded-xl bg-slate-100 dark:bg-[#1a202c] border border-slate-200 dark:border-white/10 text-slate-900 dark:text-white placeholder-slate-400 text-xs font-medium outline-none focus:border-emerald-500 transition-colors"
                   required
                 />
               </div>
@@ -155,7 +155,7 @@ export function LoginScreen({ onLoginSuccess, isDark, onToggleTheme, sessionNoti
               <button
                 type="submit"
                 disabled={loading}
-                className="w-full py-3 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs uppercase tracking-wider flex items-center justify-center gap-2 transition-all shadow-md shadow-emerald-500/20 disabled:opacity-50"
+                className="w-full btn-emerald"
               >
                 {loading ? (
                   <>
