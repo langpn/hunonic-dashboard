@@ -12,6 +12,7 @@ import { CustomRangeView } from './CustomRangeView';
 import { AddDeviceModal } from './AddDeviceModal';
 import { LoadSettingModal } from './LoadSettingModal';
 import { DayDetailModal } from './DayDetailModal';
+import { DeviceSettingsModal } from './DeviceSettingsModal';
 import type { SummaryData } from '../App';
 
 interface DashboardProps {
@@ -42,6 +43,7 @@ export function Dashboard({
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
   const [showLoadModal, setShowLoadModal] = useState(false);
+  const [showDeviceSettingsModal, setShowDeviceSettingsModal] = useState(false);
   const [selectedDayDetail, setSelectedDayDetail] = useState<{ dateStr: string; kwh: number } | null>(null);
   const [dismissDriftNotice, setDismissDriftNotice] = useState(false);
 
@@ -376,6 +378,17 @@ export function Dashboard({
                       <p className="font-semibold text-slate-800 dark:text-white">{home.name}</p>
                       <p className="text-[10px] text-slate-400 font-mono">{userPhone || 'Tài khoản Hunonic'}</p>
                     </div>
+
+                    <button
+                      onClick={() => {
+                        setShowSettings(false);
+                        setShowDeviceSettingsModal(true);
+                      }}
+                      className="w-full flex items-center gap-2 px-3 py-2 rounded-xl text-left hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-semibold transition-colors"
+                    >
+                      <Sliders className="w-4 h-4 text-emerald-500" />
+                      <span>Cài đặt & Chi tiết công tơ</span>
+                    </button>
 
                     <button
                       onClick={() => {
@@ -793,6 +806,18 @@ export function Dashboard({
         dayKwh={selectedDayDetail?.kwh || 0}
         ratePrice={ratePrice}
         token={token}
+      />
+
+      {/* Full Device Settings Hub (Matching Mobile App 1:1) */}
+      <DeviceSettingsModal
+        isOpen={showDeviceSettingsModal}
+        onClose={() => setShowDeviceSettingsModal(false)}
+        deviceId={activeDeviceId}
+        initialName={meter?.name}
+        initialRoom={meter?.room_name}
+        monthKwh={totalKwh}
+        token={token}
+        onRefresh={onRefresh}
       />
     </div>
   );
