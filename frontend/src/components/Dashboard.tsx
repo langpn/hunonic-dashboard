@@ -2,7 +2,7 @@ import { useState, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, 
   BarChart2, Zap, LogOut, RefreshCw, Sun, Moon, Wind, Loader2,
-  Activity, Cpu, Plus, ChevronDown, Layers
+  Activity, Cpu, Plus, ChevronDown, Layers, Sliders
 } from 'lucide-react';
 import { ModernCalendar } from './ModernCalendar';
 import { DailyChart } from './DailyChart';
@@ -10,6 +10,7 @@ import { HourlyChart } from './HourlyChart';
 import { YearlyChart } from './YearlyChart';
 import { CustomRangeView } from './CustomRangeView';
 import { AddDeviceModal } from './AddDeviceModal';
+import { LoadSettingModal } from './LoadSettingModal';
 import type { SummaryData } from '../App';
 
 interface DashboardProps {
@@ -39,12 +40,26 @@ export function Dashboard({
   const [showSettings, setShowSettings] = useState(false);
   const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
   const [showAddModal, setShowAddModal] = useState(false);
+  const [showLoadModal, setShowLoadModal] = useState(false);
 
   // Dynamic Device Management
   const electricMeters = summary?.electricMeters || [];
   const [activeDeviceId, setActiveDeviceId] = useState<string>(() => {
     return (summary as any)?.active_device_id || (electricMeters[0]?.id ? String(electricMeters[0].id) : '');
   });
+
+  // Dynamic Max Load Amperage (default 5.7A for Mitsubishi Heavy 13YZP)
+  const [deviceMaxA, setDeviceMaxA] = useState<number>(() => {
+    const saved = localStorage.getItem(`device_load_max_${activeDeviceId}`);
+    return saved ? parseFloat(saved) : 5.7;
+  });
+
+  useEffect(() => {
+    if (activeDeviceId) {
+      const saved = localStorage.getItem(`device_load_max_${activeDeviceId}`);
+      setDeviceMaxA(saved ? parseFloat(saved) : 5.7);
+    }
+  }, [activeDeviceId]);
 
   const activeMeter = electricMeters.find((m: any) => String(m.id) === String(activeDeviceId)) || electricMeters[0];
   const meter = activeMeter;
@@ -410,23 +425,44 @@ export function Dashboard({
                   </strong>
                 </div>
 
-                <div className="panel-subtle p-3 text-center relative overflow-hidden">
+                <div 
+                  onClick={() => setShowLoadModal(true)}
+                  className="panel-subtle p-3 text-center relative overflow-hidden group cursor-pointer hover:border-emerald-500/40 transition-all"
+                  title="Bấm để cài đặt định mức Ampe của thiết bị"
+                >
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-[10px] uppercase font-semibold block">Dòng điện</span>
-                    <span className="text-[9px] font-mono font-bold text-slate-400">
-                      {Math.min(100, Math.round((currentA / 6.5) * 100))}% tải
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-[9px] font-mono font-bold text-slate-400">
+                        {Math.min(100, Math.round((currentA / deviceMaxA) * 100))}% tải
+                      </span>
+                      <button
+                        type="button"
+                        className="p-1 rounded text-slate-400 group-hover:text-emerald-600 dark:group-hover:text-emerald-400 transition-colors"
+                      >
+                        <Sliders className="w-3 h-3" />
+                      </button>
+                    </div>
                   </div>
                   <strong className="text-sm sm:text-base font-bold font-mono text-slate-800 dark:text-slate-100 mt-0.5 block">
                     {currentA} <span className="text-xs font-normal text-slate-400">A</span>
+                    <span className="text-[10px] font-normal font-mono text-slate-400 ml-1.5 opacity-80">
+                      / {deviceMaxA}A max
+                    </span>
                   </strong>
-                  {/* Subtle load bar under amperage (max 6.5A for 13YZP) */}
+                  {/* Dynamic load bar calibrated by deviceMaxA (Default: 5.7A for Mitsu 13YZP) */}
                   <div className="w-full bg-slate-200 dark:bg-slate-700/50 h-1 rounded-full mt-1.5 overflow-hidden">
                     <div
                       className={`h-full rounded-full transition-all duration-300 ${
-                        currentA >= 4.0 ? 'bg-rose-500' : currentA >= 2.5 ? 'bg-amber-500' : currentA >= 0.7 ? 'bg-emerald-500' : 'bg-slate-400'
+                        currentA / deviceMaxA >= 0.70
+                          ? 'bg-rose-500 shadow-sm shadow-rose-500/20'
+                          : currentA / deviceMaxA >= 0.40
+                          ? 'bg-amber-500'
+                          : currentA / deviceMaxA >= 0.15
+                          ? 'bg-emerald-500'
+                          : 'bg-slate-400'
                       }`}
-                      style={{ width: `${Math.min(100, Math.max(3, Math.round((currentA / 6.5) * 100)))}%` }}
+                      style={{ width: `${Math.min(100, Math.max(3, Math.round((currentA / deviceMaxA) * 100)))}%` }}
                     />
                   </div>
                 </div>
@@ -703,6 +739,19 @@ export function Dashboard({
         onClose={() => setShowAddModal(false)}
         token={token}
         onDeviceAdded={onRefresh}
+      />
+
+      {/* Dynamic Load Setting Modal */}
+      <LoadSettingModal
+        isOpen={showLoadModal}
+        onClose={() => setShowLoadModal(false)}
+        deviceId={activeDeviceId}
+        deviceName={meter?.name}
+        currentMaxA={deviceMaxA}
+        onSave={(newVal) => {
+          setDeviceMaxA(newVal);
+          localStorage.setItem(`device_load_max_${activeDeviceId}`, String(newVal));
+        }}
       />
     </div>
   );

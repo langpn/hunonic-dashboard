@@ -222,3 +222,51 @@ deviceRouter.post('/api/device/thresholds', async (c) => {
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }
 });
+
+// ==============================================================================
+// 5. DYNAMIC DEVICE LOAD CONFIGURATION (Custom Amperage Max)
+// ==============================================================================
+
+// In-memory / persistent load cache by device ID (Default 5.7A for Mitsubishi Heavy 13YZP)
+const deviceLoadConfigs: Record<string, number> = {
+  default: 5.7,
+  '3590138': 5.7,
+};
+
+deviceRouter.get('/api/device/load-config', (c) => {
+  const deviceId = c.req.query('device_id') || 'default';
+  const maxA = deviceLoadConfigs[deviceId] || 5.7;
+  return c.json({
+    success: true,
+    data: {
+      device_id: deviceId,
+      max_amperage_a: maxA,
+    },
+  });
+});
+
+deviceRouter.post('/api/device/load-config', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { device_id, max_amperage_a } = body;
+    const val = parseFloat(max_amperage_a);
+
+    if (isNaN(val) || val <= 0 || val > 200) {
+      return c.json({ success: false, error: 'Định mức Ampe không hợp lệ (cho phép từ 0.5A đến 200A)!' }, 400);
+    }
+
+    const key = device_id ? String(device_id) : 'default';
+    deviceLoadConfigs[key] = val;
+
+    return c.json({
+      success: true,
+      message: `Đã lưu định mức tải ${val}A cho thiết bị!`,
+      data: {
+        device_id: key,
+        max_amperage_a: val,
+      },
+    });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
