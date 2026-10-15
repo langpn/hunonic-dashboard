@@ -100,7 +100,9 @@ app.get('/api/dashboard/summary', async (c) => {
     // Parse requested year and month (fallback to current date)
     const reqYear = c.req.query('year') ? parseInt(c.req.query('year')!) : new Date().getFullYear();
     const reqMonth = c.req.query('month') ? parseInt(c.req.query('month')!) : (new Date().getMonth() + 1);
-    const cacheKey = `${reqYear}-${reqMonth}`;
+    const targetDeviceId = c.req.query('device_id');
+    const targetRootId = c.req.query('root_id');
+    const cacheKey = `${reqYear}-${reqMonth}-${targetDeviceId || 'default'}`;
 
     if (!forceRefresh && summaryCache && summaryCache.key === cacheKey && (now - summaryCache.timestamp < CACHE_TTL_MS)) {
       return c.json({ success: true, data: summaryCache.data, cached: true });
@@ -110,7 +112,8 @@ app.get('/api/dashboard/summary', async (c) => {
     
     // 1. Fetch homes
     const homes = await client.getHomes();
-    const home = homes[0] || { id: '966357', name: 'Nhà của Lang', timezone: 'GMT+07:00' };
+    const targetHomeId = c.req.query('home_id');
+    const home = (targetHomeId ? homes.find((h: any) => String(h.id) === String(targetHomeId)) : null) || homes[0] || { id: '966357', name: 'Nhà của Lang', timezone: 'GMT+07:00' };
     
     // 2. Fetch devices
     const devices = await client.getDevicesByHome(home.id);
@@ -118,15 +121,18 @@ app.get('/api/dashboard/summary', async (c) => {
       d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi'
     );
     
-    // 3. Process primary electric meter
+    // 3. Process primary/active electric meter dynamically
     let monthData = null;
     let electricityRate = null;
     let todayKwh = 0;
     let currentPowerW = 0;
     
-    if (electricMeters.length > 0) {
-      const meter = electricMeters[0];
-      const dataExtra = parseJsonSafe(meter.data_extra);
+    const activeMeter = (targetDeviceId ? electricMeters.find((m: any) => String(m.id) === String(targetDeviceId)) : null) ||
+                        (targetRootId ? electricMeters.find((m: any) => m.root_id === targetRootId) : null) ||
+                        electricMeters[0];
+
+    if (activeMeter) {
+      const dataExtra = parseJsonSafe(activeMeter.data_extra);
       currentPowerW = dataExtra.power_current || 0;
 
       // Record sample to local SQLite storage using fluctuating power integration
@@ -135,13 +141,13 @@ app.get('/api/dashboard/summary', async (c) => {
       }
 
       try {
-        monthData = await client.getMonthConsumption(meter.root_id, reqYear, reqMonth);
+        monthData = await client.getMonthConsumption(activeMeter.root_id, reqYear, reqMonth);
       } catch (e) {
         console.warn(`Failed to fetch month consumption data for ${reqMonth}/${reqYear}:`, e);
       }
 
       try {
-        const rates = await client.getElectricityRate(meter.root_id);
+        const rates = await client.getElectricityRate(activeMeter.root_id);
         electricityRate = rates[0] || null;
       } catch (e) {
         console.warn('Failed to fetch rate:', e);
@@ -239,6 +245,7 @@ app.get('/api/dashboard/summary', async (c) => {
         price: ratePrice,
         group_name: rateGroup,
       },
+      active_device_id: activeMeter ? String(activeMeter.id) : null,
       storage_diagnostics: sqliteEnergy.getDiagnostics(),
     };
 
@@ -250,11 +257,19 @@ app.get('/api/dashboard/summary', async (c) => {
 
     return c.json({ success: true, data: responseData });
   } catch (error) {
-    if (error instanceof HunonicAuthError || (error instanceof Error && error.message.toLowerCase().includes('xác thực'))) {
+    const msg = error instanceof Error ? error.message.toLowerCase() : '';
+    const isAuthRelated = error instanceof HunonicAuthError || 
+      msg.includes('xác thực') || 
+      msg.includes('token') || 
+      msg.includes('hết hạn') || 
+      msg.includes('đăng nhập') ||
+      (msg.includes('500') && !!c.req.header('Authorization'));
+
+    if (isAuthRelated) {
       return c.json({
         success: false,
         code: 'SESSION_REVOKED',
-        error: 'Phiên đăng nhập đã hết hạn do tài khoản vừa đăng nhập trên điện thoại (iPhone). Vui lòng đăng nhập lại trên trình duyệt!',
+        error: 'Phiên đăng nhập đã hết hạn do tài khoản vừa đăng nhập trên điện thoại (iPhone). Vui lòng nhấn Đăng Nhập lại trên trình duyệt!',
       }, 401);
     }
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
@@ -267,9 +282,13 @@ app.get('/api/dashboard/summary', async (c) => {
 
 app.get('/api/device/realtime', async (c) => {
   try {
+    const targetDeviceId = c.req.query('device_id');
+    const targetRootId = c.req.query('root_id');
     const client = getClient(c);
     const devices = await client.getDevicesByHome();
-    const meter = devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
+    const meter = (targetDeviceId ? devices.find((d: any) => String(d.id) === String(targetDeviceId)) : null) ||
+                  (targetRootId ? devices.find((d: any) => d.root_id === targetRootId) : null) ||
+                  devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
     if (!meter) {
       return c.json({ success: false, error: 'Không tìm thấy công tơ điện!' }, 404);
     }
@@ -330,7 +349,15 @@ app.get('/api/device/realtime', async (c) => {
       },
     });
   } catch (error) {
-    if (error instanceof HunonicAuthError || (error instanceof Error && error.message.toLowerCase().includes('xác thực'))) {
+    const msg = error instanceof Error ? error.message.toLowerCase() : '';
+    const isAuthRelated = error instanceof HunonicAuthError || 
+      msg.includes('xác thực') || 
+      msg.includes('token') || 
+      msg.includes('hết hạn') || 
+      msg.includes('đăng nhập') ||
+      (msg.includes('500') && !!c.req.header('Authorization'));
+
+    if (isAuthRelated) {
       return c.json({ success: false, code: 'SESSION_REVOKED', error: 'Phiên đăng nhập đã hết hạn.' }, 401);
     }
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
@@ -344,9 +371,13 @@ app.get('/api/device/realtime', async (c) => {
 app.get('/api/dashboard/history', async (c) => {
   try {
     const type = c.req.query('type') || 'year';
+    const targetDeviceId = c.req.query('device_id');
+    const targetRootId = c.req.query('root_id');
     const client = getClient(c);
     const devices = await client.getDevicesByHome();
-    const meter = devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
+    const meter = (targetDeviceId ? devices.find((d: any) => String(d.id) === String(targetDeviceId)) : null) ||
+                  (targetRootId ? devices.find((d: any) => d.root_id === targetRootId) : null) ||
+                  devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi');
     if (!meter) {
       return c.json({ success: false, error: 'Không tìm thấy công tơ điện!' }, 404);
     }
@@ -510,6 +541,105 @@ app.post('/api/device/thresholds', async (c) => {
     const success = await client.updateThresholds(body);
     summaryCache = null;
     return c.json({ success, message: 'Cập nhật ngưỡng an toàn thành công!' });
+  } catch (error) {
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+// ==============================================================================
+// 4.1 MULTI-DEVICE MANAGEMENT & QR CLAIM (Dynamic Device Gateway)
+// ==============================================================================
+
+app.get('/api/devices/list', async (c) => {
+  try {
+    const client = getClient(c);
+    const homes = await client.getHomes();
+    const allMeters: any[] = [];
+
+    for (const h of homes) {
+      try {
+        const devices = await client.getDevicesByHome(h.id);
+        const meters = devices.filter((d: any) =>
+          d.root_type === 'elmeter' || d.root_type === 'ekmeter' || d.root_type === 'atmwifi'
+        ).map((m: any) => {
+          const dataExtra = parseJsonSafe(m.data_extra);
+          const rootExtra = parseJsonSafe(m.root_extra);
+          return {
+            id: String(m.id),
+            name: m.name,
+            root_id: m.root_id,
+            root_type: m.root_type,
+            room_name: m.room_name || 'Mặc định',
+            home_id: String(h.id),
+            home_name: h.name,
+            power_current_w: dataExtra.power_current || 0,
+            power_of_month: m.power_of_month ? parseFloat(m.power_of_month) : (rootExtra.power_of_month ? parseFloat(rootExtra.power_of_month) : 0),
+            money_of_month: m.money_of_month || rootExtra.money_of_month || 0,
+            last_online: m.last_online,
+          };
+        });
+        allMeters.push(...meters);
+      } catch (e) {
+        console.warn(`Failed to list devices for home ${h.id}:`, e);
+      }
+    }
+
+    return c.json({
+      success: true,
+      data: {
+        homes: homes.map((h: any) => ({ id: String(h.id), name: h.name })),
+        devices: allMeters,
+      },
+    });
+  } catch (error) {
+    const msg = error instanceof Error ? error.message.toLowerCase() : '';
+    const isAuthRelated = error instanceof HunonicAuthError || 
+      msg.includes('xác thực') || 
+      msg.includes('token') || 
+      msg.includes('hết hạn') || 
+      msg.includes('đăng nhập') ||
+      (msg.includes('500') && !!c.req.header('Authorization'));
+
+    if (isAuthRelated) {
+      return c.json({ success: false, code: 'SESSION_REVOKED', error: 'Phiên đăng nhập đã hết hạn.' }, 401);
+    }
+    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
+  }
+});
+
+app.post('/api/devices/claim', async (c) => {
+  try {
+    const body = await c.req.json();
+    const { qr_code, serial_number, name } = body;
+    const rawCode = (qr_code || serial_number || '').trim();
+
+    if (!rawCode) {
+      return c.json({ success: false, error: 'Vui lòng nhập hoặc quét mã QR trên công tơ!' }, 400);
+    }
+
+    // Validate Hunonic hardware QR formats (e.g. H26230844153246002 or standard serials)
+    const isHunonicQR = /^H[0-9A-Z]{10,25}$/i.test(rawCode);
+    const deviceType = rawCode.startsWith('H26') ? 'Hunonic EMTEC / EKMeter (Kẹp dòng CT)' : 'Công tơ thông minh Hunonic';
+
+    // Invalidate caches so next fetch refreshes device list
+    summaryCache = null;
+
+    return c.json({
+      success: true,
+      message: 'Nhận diện mã công tơ thành công!',
+      data: {
+        code: rawCode,
+        is_valid_format: isHunonicQR,
+        device_type: deviceType,
+        custom_name: name || 'Công tơ điện mới',
+        softap_setup: {
+          step1: 'Cấp nguồn cho công tơ. Nhấn giữ nút tròn 5 giây đến khi đèn nhấp nháy.',
+          step2: 'Mở cài đặt Wi-Fi điện thoại/máy tính, kết nối vào mạng Wi-Fi tên HUNONIC_... (không cần mật khẩu).',
+          step3: 'Mở trình duyệt web truy cập địa chỉ http://192.168.4.1/wificonfig để nhập tên Wi-Fi và mật khẩu nhà bạn.',
+          step4: 'Sau khi công tơ kết nối Internet, bấm Làm Mới trên dashboard để bắt đầu sử dụng ngay lập tức!',
+        },
+      },
+    });
   } catch (error) {
     return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
   }

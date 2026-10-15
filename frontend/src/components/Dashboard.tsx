@@ -2,13 +2,14 @@ import { useState, useEffect } from 'react';
 import { 
   ChevronLeft, ChevronRight, Settings, Calendar as CalendarIcon, 
   BarChart2, Zap, LogOut, RefreshCw, Sun, Moon, Wind, Loader2,
-  Activity, Cpu
+  Activity, Cpu, Plus, ChevronDown, Layers
 } from 'lucide-react';
 import { ModernCalendar } from './ModernCalendar';
 import { DailyChart } from './DailyChart';
 import { HourlyChart } from './HourlyChart';
 import { YearlyChart } from './YearlyChart';
 import { CustomRangeView } from './CustomRangeView';
+import { AddDeviceModal } from './AddDeviceModal';
 import type { SummaryData } from '../App';
 
 interface DashboardProps {
@@ -36,6 +37,17 @@ export function Dashboard({
   const [periodTab, setPeriodTab] = useState<PeriodTab>('month');
   const [viewMode, setViewMode] = useState<BottomViewMode>('calendar');
   const [showSettings, setShowSettings] = useState(false);
+  const [showDeviceDropdown, setShowDeviceDropdown] = useState(false);
+  const [showAddModal, setShowAddModal] = useState(false);
+
+  // Dynamic Device Management
+  const electricMeters = summary?.electricMeters || [];
+  const [activeDeviceId, setActiveDeviceId] = useState<string>(() => {
+    return (summary as any)?.active_device_id || (electricMeters[0]?.id ? String(electricMeters[0].id) : '');
+  });
+
+  const activeMeter = electricMeters.find((m: any) => String(m.id) === String(activeDeviceId)) || electricMeters[0];
+  const meter = activeMeter;
 
   // Month navigation state
   const [currentYear, setCurrentYear] = useState(() => new Date().getFullYear());
@@ -50,17 +62,17 @@ export function Dashboard({
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   const home = summary?.home || { id: '966357', name: 'Nhà của Lang', timezone: 'GMT+07:00' };
-  const electricMeters = summary?.electricMeters || [];
   const today = summary?.today || { date: todayStr, kwh: 0, power_current_w: 0, cost_estimated: 0, hourly: [] };
   const electricityRate = summary?.electricityRate;
-
-  const meter = electricMeters[0];
   const ratePrice = electricityRate?.price ? parseInt(electricityRate.price) : 3800;
 
   // Sync initial month data
   useEffect(() => {
     if (summary?.currentMonth) {
       setActiveMonthData(summary.currentMonth);
+    }
+    if ((summary as any)?.active_device_id) {
+      setActiveDeviceId(String((summary as any).active_device_id));
     }
   }, [summary]);
 
@@ -74,7 +86,7 @@ export function Dashboard({
     lastUpdateMs: Date.now(),
   });
 
-  // Auto-poll live power every 3.5 seconds
+  // Auto-poll live power every 3.5 seconds for the active device
   useEffect(() => {
     let mounted = true;
     const fetchLive = async () => {
@@ -82,7 +94,8 @@ export function Dashboard({
         const headers: Record<string, string> = {};
         if (token) headers['Authorization'] = `Bearer ${token}`;
 
-        const res = await fetch('/api/device/realtime', { headers });
+        const url = activeDeviceId ? `/api/device/realtime?device_id=${encodeURIComponent(activeDeviceId)}` : '/api/device/realtime';
+        const res = await fetch(url, { headers });
         const json = await res.json();
         if (mounted && json.success && json.data) {
           setLiveTelemetry({
@@ -104,16 +117,21 @@ export function Dashboard({
       mounted = false;
       clearInterval(interval);
     };
-  }, [token]);
+  }, [token, activeDeviceId]);
 
   // Dynamic Month Fetching
-  const fetchMonthData = async (y: number, m: number) => {
+  const fetchMonthData = async (y: number, m: number, devId?: string) => {
     setLoadingMonth(true);
     try {
       const headers: Record<string, string> = {};
       if (token) headers['Authorization'] = `Bearer ${token}`;
 
-      const res = await fetch(`/api/dashboard/summary?year=${y}&month=${m}&refresh=true`, { headers });
+      const targetId = devId || activeDeviceId;
+      const url = targetId
+        ? `/api/dashboard/summary?year=${y}&month=${m}&device_id=${encodeURIComponent(targetId)}&refresh=true`
+        : `/api/dashboard/summary?year=${y}&month=${m}&refresh=true`;
+
+      const res = await fetch(url, { headers });
       const json = await res.json();
       if (json.success && json.data) {
         if (json.data.currentMonth) {
@@ -125,6 +143,12 @@ export function Dashboard({
     } finally {
       setLoadingMonth(false);
     }
+  };
+
+  const handleSwitchDevice = (newId: string) => {
+    setActiveDeviceId(newId);
+    setShowDeviceDropdown(false);
+    fetchMonthData(currentYear, currentMonthNum, newId);
   };
 
   const handlePrevMonth = () => {
@@ -206,29 +230,85 @@ export function Dashboard({
       <header className="sticky top-0 z-30 bg-white/80 dark:bg-[#12161f]/80 backdrop-blur-xl border-b border-black/5 dark:border-white/5 transition-colors">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16 sm:h-20 gap-3">
-            {/* Brand & Device Title */}
+            {/* Brand & Device Title with Dynamic Selector */}
             <div className="flex items-center gap-3 min-w-0">
               <div className="w-10 h-10 rounded-2xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 flex-shrink-0">
                 <Wind className="w-5 h-5" />
               </div>
 
-              <div className="min-w-0">
-                <div className="flex items-center gap-2">
-                  <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight truncate">
-                    Mitsubishi Heavy 13YZP
-                  </h1>
-                  <span className="hidden sm:inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
-                    EKMeter CT
-                  </span>
-                </div>
-                <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {home.name} • {meter?.room_name || 'Phòng ngủ Master'}
-                </p>
+              {/* Dynamic Device Switcher Dropdown */}
+              <div className="relative min-w-0">
+                <button
+                  onClick={() => setShowDeviceDropdown((v) => !v)}
+                  className="flex items-center gap-2 text-left group hover:opacity-90 transition-opacity"
+                  title="Bấm để đổi công tơ điện"
+                >
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2">
+                      <h1 className="text-sm sm:text-base font-bold text-slate-900 dark:text-white tracking-tight truncate">
+                        {meter?.name || 'Mitsubishi Heavy 13YZP'}
+                      </h1>
+                      <span className="hidden sm:inline-block px-2 py-0.5 rounded-md text-[10px] font-mono font-bold bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-700">
+                        {meter?.root_type === 'ekmeter' ? 'EKMeter CT' : meter?.root_type?.toUpperCase() || 'METER'}
+                      </span>
+                      {electricMeters.length > 1 && (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400 group-hover:text-slate-600 dark:group-hover:text-white transition-colors" />
+                      )}
+                    </div>
+                    <p className="text-[11px] sm:text-xs text-slate-500 dark:text-slate-400 truncate">
+                      {home.name} • {meter?.room_name || 'Phòng ngủ Master'}
+                    </p>
+                  </div>
+                </button>
+
+                {/* Device Switcher Popup */}
+                {showDeviceDropdown && electricMeters.length > 1 && (
+                  <div className="absolute left-0 mt-2 w-72 rounded-2xl bg-white dark:bg-[#1a202c] border border-slate-200 dark:border-white/10 shadow-2xl p-2 z-50 space-y-1 text-xs">
+                    <div className="px-3 py-1.5 text-slate-400 font-semibold text-[10px] uppercase border-b border-slate-100 dark:border-white/5 flex items-center justify-between">
+                      <span>Chọn công tơ ({electricMeters.length})</span>
+                      <Layers className="w-3.5 h-3.5" />
+                    </div>
+                    <div className="max-h-60 overflow-y-auto space-y-1 pt-1">
+                      {electricMeters.map((m: any) => {
+                        const isCurrent = String(m.id) === String(activeDeviceId);
+                        return (
+                          <button
+                            key={m.id}
+                            onClick={() => handleSwitchDevice(String(m.id))}
+                            className={`w-full flex items-center justify-between p-2.5 rounded-xl text-left transition-colors ${
+                              isCurrent
+                                ? 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 font-bold'
+                                : 'hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300'
+                            }`}
+                          >
+                            <div className="min-w-0 pr-2">
+                              <p className="truncate text-xs">{m.name}</p>
+                              <p className="text-[10px] text-slate-400 font-normal">{m.room_name || 'Chưa xếp phòng'}</p>
+                            </div>
+                            <span className="font-mono text-[11px] flex-shrink-0">
+                              {m.power_of_month ? `${parseFloat(m.power_of_month).toFixed(1)} kWh` : ''}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
 
             {/* Quick Actions Header */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+              {/* Add Device Button */}
+              <button
+                onClick={() => setShowAddModal(true)}
+                className="btn-precision text-emerald-600 dark:text-emerald-400 font-semibold"
+                title="Thêm công tơ mới không cần app"
+              >
+                <Plus className="w-4 h-4" />
+                <span className="hidden sm:inline">Thêm công tơ</span>
+              </button>
+
               {/* Live Ticker Indicator */}
               <div className="hidden md:flex items-center gap-2 px-3 py-1.5 rounded-xl bg-slate-100 dark:bg-[#1a202c] text-xs font-medium border border-black/5 dark:border-white/5">
                 <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -616,6 +696,14 @@ export function Dashboard({
       <footer className="border-t border-black/5 dark:border-white/5 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
         Mitsubishi Heavy 13YZP Telemetry Studio • Native C++ SQLite Storage • Tối ưu 60fps
       </footer>
+
+      {/* Add Device / SoftAP Modal */}
+      <AddDeviceModal
+        isOpen={showAddModal}
+        onClose={() => setShowAddModal(false)}
+        token={token}
+        onDeviceAdded={onRefresh}
+      />
     </div>
   );
 }
