@@ -268,12 +268,40 @@ dashboardRouter.get('/api/dashboard/history', async (c) => {
         console.warn(`Failed to fetch cloud day data for ${date}:`, e);
       }
 
-      // 2. Reconcile energy into SQLite so the 24-hour chart matches reality 100%
+      // 2. Attempt to query official Cloud Hourly API (Type 1)
+      try {
+        const [year, month] = date.split('-');
+        const hourlyCloudRes = await client.getGraphData({
+          type: '1',
+          root_id: meter.root_id,
+          time_start: date,
+          time_end: date,
+          year: year || new Date().getFullYear().toString(),
+          month: month || (new Date().getMonth() + 1).toString().padStart(2, '0'),
+        });
+        if (hourlyCloudRes && Array.isArray(hourlyCloudRes.graph_data)) {
+          const nonZeroHours = (hourlyCloudRes.graph_data as any[]).filter((d: any) => (d.power || d.value || 0) > 0);
+          if (nonZeroHours.length > 0) {
+            console.log(`⚡ [Cloud Hourly API] Found ${nonZeroHours.length} non-zero hours from Cloud for ${date}`);
+            for (const hItem of nonZeroHours) {
+              const h = hItem.hours ?? hItem.hour;
+              const p = hItem.power ?? hItem.value;
+              if (typeof h === 'number' && typeof p === 'number' && p > 0) {
+                sqliteEnergy.recordHourlyBucket(date, h, p);
+              }
+            }
+          }
+        }
+      } catch (e) {
+        // Fallback gracefully to high-resolution local SQLite WAL engine
+      }
+
+      // 3. Reconcile energy into SQLite so the 24-hour chart matches reality 100%
       if (cloudTotalKwh > 0) {
         sqliteEnergy.reconcileCloudDailyKwh(date, cloudTotalKwh);
       }
 
-      // 3. Read the 24 hourly buckets
+      // 4. Read the 24 hourly buckets
       const hourly = sqliteEnergy.getHourlyForDate(date);
       const localTotalKwh = parseFloat(hourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
       const finalTotalKwh = localTotalKwh > 0 ? localTotalKwh : cloudTotalKwh;

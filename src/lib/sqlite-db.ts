@@ -210,6 +210,25 @@ class SqliteEnergyEngine {
   }
 
   /**
+   * Directly record or seed an hourly bucket (e.g. from official Cloud Type 1 hourly API)
+   */
+  public recordHourlyBucket(dateStr: string, hour: number, kwh: number, avgPowerW?: number): void {
+    const safeKwh = Math.max(0, kwh);
+    const safeW = avgPowerW || Math.round(safeKwh * 1000);
+    const nowMs = Date.now();
+
+    const upsertStmt = this.db.prepare(`
+      INSERT INTO hourly_buckets (date, hour, kwh, avg_power_w, min_power_w, max_power_w, samples_count, last_w, last_time)
+      VALUES (?, ?, ?, ?, 20, ?, 60, ?, ?)
+      ON CONFLICT(date, hour) DO UPDATE SET
+        kwh = excluded.kwh,
+        avg_power_w = excluded.avg_power_w,
+        max_power_w = MAX(max_power_w, excluded.max_power_w)
+    `);
+    upsertStmt.run(dateStr, hour, safeKwh, safeW, safeW, safeW, nowMs);
+  }
+
+  /**
    * Get 24 hourly buckets for any date
    */
   public getHourlyForDate(dateStr: string): HourlyBucketRecord[] {

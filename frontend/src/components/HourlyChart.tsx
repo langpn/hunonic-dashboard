@@ -25,6 +25,8 @@ export function HourlyChart({
   const [date, setDate] = useState(() => initialDate || getVnDateString());
   const [data, setData] = useState<HourlyPoint[]>(initialData);
   const [dayTotalKwh, setDayTotalKwh] = useState(0);
+  const [firstPower, setFirstPower] = useState(0);
+  const [lastPower, setLastPower] = useState(0);
   const [isFromCloud, setIsFromCloud] = useState(false);
   const [loading, setLoading] = useState(false);
   const [hoveredHour, setHoveredHour] = useState<HourlyPoint | null>(null);
@@ -44,6 +46,8 @@ export function HourlyChart({
       if (json.success && json.data) {
         setData(json.data.hourly || []);
         setDayTotalKwh(json.data.total_kwh || 0);
+        setFirstPower(json.data.first_power || 0);
+        setLastPower(json.data.last_power || 0);
         setIsFromCloud(!!json.data.is_from_cloud);
       }
     } catch (e) {
@@ -118,6 +122,38 @@ export function HourlyChart({
         </div>
       ) : (
         <>
+          {/* Official Ground-Truth Meter Index Boxes (Matching Official Hunonic App 1:1) */}
+          {(firstPower > 0 || lastPower > 0) && (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 p-4 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-[#1a202c] border border-slate-200/80 dark:border-white/5">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 block">Chỉ số công tơ cũ (00:00)</span>
+                  <strong className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                    {firstPower.toFixed(2)} <span className="text-xs font-normal text-slate-400">kWh</span>
+                  </strong>
+                </div>
+                <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-500">
+                  <Zap className="w-4 h-4" />
+                </div>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white dark:bg-[#1a202c] border border-slate-200/80 dark:border-white/5">
+                <div>
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 block">Chỉ số công tơ mới (23:59)</span>
+                  <strong className="text-base sm:text-lg font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                    {lastPower.toFixed(2)} <span className="text-xs font-normal text-slate-400">kWh</span>
+                  </strong>
+                </div>
+                <div className="text-right">
+                  <span className="text-[10px] uppercase font-semibold text-slate-400 block">Chênh lệch ngày</span>
+                  <span className="text-xs font-bold font-mono text-sky-600 dark:text-sky-400">
+                    +{(lastPower >= firstPower && firstPower > 0 ? lastPower - firstPower : totalDayKwh).toFixed(2)} kWh
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
+
           {/* Cloud vs Local Note Banner if historical day */}
           {isFromCloud && (
             <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-900/60 border border-slate-100 dark:border-slate-800 flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
