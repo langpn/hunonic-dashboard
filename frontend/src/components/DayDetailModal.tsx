@@ -63,7 +63,7 @@ export function DayDetailModal({
       if (json.success && json.data) {
         setData(json.data.hourly || []);
         const serverKwh = json.data.total_kwh || 0;
-        setTotalKwh(isToday && dayKwh > 0 ? Math.max(serverKwh, dayKwh) : serverKwh || dayKwh);
+        setTotalKwh(serverKwh > 0 ? serverKwh : dayKwh);
         setFirstPower(json.data.first_power || 0);
         setLastPower(json.data.last_power || 0);
         setPeakHour(json.data.peak_hour || 0);

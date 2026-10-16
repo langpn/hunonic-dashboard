@@ -86,20 +86,31 @@ deviceRouter.get('/api/device/realtime', async (c) => {
       sqliteEnergy.recordFluctuatingPower(powerW);
     }
 
-    // Real-time live accumulated today kWh anchored directly to official Cloud baseline
+    // Real-time live accumulated today kWh anchored directly to official Cloud Mobile API
     const { dateStr: todayStr } = getVnTimeParts();
-    const cloudBaselineKwh = (summaryCache?.data?.today?.date === todayStr) ? (summaryCache.data.today.kwh || 0) : 0;
-    const todayHourly = sqliteEnergy.getHourlyForDate(todayStr);
-    const localHourlyKwh = parseFloat(todayHourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
-    const realtimeTodayKwh = cloudBaselineKwh > 0 
-      ? parseFloat(Math.max(cloudBaselineKwh, localHourlyKwh).toFixed(3)) 
-      : (localHourlyKwh || 0.84);
+    let realtimeTodayKwh = (summaryCache?.data?.today?.date === todayStr) ? (summaryCache.data.today.kwh || 0) : 0;
+    
+    if (realtimeTodayKwh <= 0) {
+      try {
+        const { getMobileApiClient } = await import('../lib/hunonic-mobile-api.js');
+        const mobileClient = getMobileApiClient();
+        const cloudToday = await mobileClient.getHourlyEnergy(meter.root_id, todayStr);
+        if (cloudToday && cloudToday.total_power > 0) {
+          realtimeTodayKwh = cloudToday.total_power;
+        }
+      } catch (e) {
+        // Fallback to month power if available
+        if (rootExtra?.power_of_month) {
+          realtimeTodayKwh = parseFloat(rootExtra.power_of_month);
+        }
+      }
+    }
 
     const telemetryData = {
       power_w: powerW,
       voltage_v: voltageV,
       current_a: currentA,
-      today_kwh: realtimeTodayKwh,
+      today_kwh: parseFloat(realtimeTodayKwh.toFixed(3)),
       leakage_ma: leakageMa,
       last_online: meter.last_online,
       is_online: isOnline,

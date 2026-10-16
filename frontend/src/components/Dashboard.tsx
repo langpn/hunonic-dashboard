@@ -133,7 +133,7 @@ export function Dashboard({
         const json = await res.json();
         if (mounted && json.success && json.data) {
           if (json.data.today_kwh !== undefined && json.data.today_kwh > 0) {
-            setLiveTodayKwh((prev) => Math.max(prev, json.data.today_kwh));
+            setLiveTodayKwh(json.data.today_kwh);
           }
           setLiveTelemetry({
             powerW: json.data.power_w,
