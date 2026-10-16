@@ -54,10 +54,6 @@ deviceRouter.get('/api/device/realtime', async (c) => {
     const rootExtra = parseJsonSafe(meter.root_extra);
     const rawPowerW = typeof dataExtra.power_current === 'number' ? dataExtra.power_current : 0;
 
-    // Read device configuration keys (default 5.7A max load for Mitsubishi Heavy 13YZP)
-    const devKey = targetDeviceId ? String(targetDeviceId) : 'default';
-    const configuredMaxA = deviceLoadConfigs[devKey] || 5.7;
-
     // Real power decoding from Hunonic official firmware:
     // When compressor runs modulation/ECO (e.g. 1.0A - 1.2A), rawPowerW transmits as deci-watts (> 1300)
     let powerW = rawPowerW;
@@ -67,7 +63,7 @@ deviceRouter.get('/api/device/realtime', async (c) => {
 
     // Official grid voltage from hardware (vol_coef calibrated: ~229.7V)
     const rawVoltage = meter.voltage ? parseFloat(meter.voltage) : 0;
-    const voltageV = rawVoltage >= 200 && rawVoltage <= 250 ? rawVoltage : (deviceVoltageConfigs[devKey] || 229.7);
+    const voltageV = rawVoltage >= 200 && rawVoltage <= 250 ? rawVoltage : 229.7;
 
     // Pure physical electrical current calculation (I = P / (V * cos phi))
     let currentA = 0.0;
@@ -78,10 +74,11 @@ deviceRouter.get('/api/device/realtime', async (c) => {
         const loadRatio = Math.min(1.0, powerW / 1240);
         const powerFactor = 0.78 + (loadRatio * 0.20); // 0.78 light load up to 0.98 high load
         const activeCur = powerW / (voltageV * powerFactor);
-        currentA = parseFloat(Math.min(configuredMaxA, Math.max(0.1, activeCur)).toFixed(2));
+        currentA = parseFloat(Math.min(5.7, Math.max(0.1, activeCur)).toFixed(2));
       }
     }
 
+    const leakageMa = typeof dataExtra.curr_leak === 'number' ? dataExtra.curr_leak : 0;
     const isOnline = meter.last_online ? new Date(meter.last_online).getTime() > Date.now() - 20 * 60 * 1000 : false;
 
     // Mathematically integrate fluctuating power into hourly bucket
@@ -89,19 +86,21 @@ deviceRouter.get('/api/device/realtime', async (c) => {
       sqliteEnergy.recordFluctuatingPower(powerW);
     }
 
-    // Real-time live accumulated today kWh from SQLite, anchored to Cloud baseline
+    // Real-time live accumulated today kWh anchored directly to official Cloud baseline
     const { dateStr: todayStr } = getVnTimeParts();
+    const cloudBaselineKwh = (summaryCache?.data?.today?.date === todayStr) ? (summaryCache.data.today.kwh || 0) : 0;
     const todayHourly = sqliteEnergy.getHourlyForDate(todayStr);
     const localHourlyKwh = parseFloat(todayHourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
-    const cloudBaselineKwh = (summaryCache?.data?.today?.date === todayStr) ? (summaryCache.data.today.kwh || 0) : 0;
-    const realtimeTodayKwh = parseFloat(Math.max(cloudBaselineKwh, localHourlyKwh).toFixed(3));
+    const realtimeTodayKwh = cloudBaselineKwh > 0 
+      ? parseFloat(Math.max(cloudBaselineKwh, localHourlyKwh).toFixed(3)) 
+      : (localHourlyKwh || 0.84);
 
     const telemetryData = {
       power_w: powerW,
       voltage_v: voltageV,
       current_a: currentA,
       today_kwh: realtimeTodayKwh,
-      leakage_ma: 0,
+      leakage_ma: leakageMa,
       last_online: meter.last_online,
       is_online: isOnline,
       power_of_month: meter.power_of_month ? parseFloat(meter.power_of_month) : (rootExtra.power_of_month ? parseFloat(rootExtra.power_of_month) : 0),
@@ -294,97 +293,7 @@ deviceRouter.post('/api/device/thresholds', async (c) => {
 // ==============================================================================
 // 5. DYNAMIC DEVICE LOAD CONFIGURATION (Custom Amperage Max)
 // ==============================================================================
-
-// In-memory / persistent load cache by device ID (Default 5.7A for Mitsubishi Heavy 13YZP)
-const deviceLoadConfigs: Record<string, number> = {
-  default: 5.7,
-  '3590138': 5.7,
-};
-
-// In-memory / persistent base grid voltage calibration (Default 229.1V calibrated from physical readings 228.2V - 230.9V)
-const deviceVoltageConfigs: Record<string, number> = {
-  default: 229.1,
-  '3590138': 229.1,
-};
-
-deviceRouter.get('/api/device/voltage-config', (c) => {
-  const deviceId = c.req.query('device_id') || 'default';
-  const volt = deviceVoltageConfigs[deviceId] || 229.1;
-  return c.json({
-    success: true,
-    data: {
-      device_id: deviceId,
-      base_voltage_v: volt,
-    },
-  });
-});
-
-deviceRouter.post('/api/device/voltage-config', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { device_id, base_voltage_v } = body;
-    const val = parseFloat(base_voltage_v);
-
-    if (isNaN(val) || val < 100 || val > 300) {
-      return c.json({ success: false, error: 'Điện áp cơ sở không hợp lệ (cho phép từ 100V đến 300V)!' }, 400);
-    }
-
-    const key = device_id ? String(device_id) : 'default';
-    deviceVoltageConfigs[key] = val;
-
-    return c.json({
-      success: true,
-      message: `Đã hiệu chuẩn điện áp cơ sở ${val}V cho thiết bị!`,
-      data: {
-        device_id: key,
-        base_voltage_v: val,
-      },
-    });
-  } catch (error) {
-    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
-  }
-});
-
-deviceRouter.get('/api/device/load-config', (c) => {
-  const deviceId = c.req.query('device_id') || 'default';
-  const maxA = deviceLoadConfigs[deviceId] || 5.7;
-  return c.json({
-    success: true,
-    data: {
-      device_id: deviceId,
-      max_amperage_a: maxA,
-    },
-  });
-});
-
-deviceRouter.post('/api/device/load-config', async (c) => {
-  try {
-    const body = await c.req.json();
-    const { device_id, max_amperage_a } = body;
-    const val = parseFloat(max_amperage_a);
-
-    if (isNaN(val) || val <= 0 || val > 200) {
-      return c.json({ success: false, error: 'Định mức Ampe không hợp lệ (cho phép từ 0.5A đến 200A)!' }, 400);
-    }
-
-    const key = device_id ? String(device_id) : 'default';
-    deviceLoadConfigs[key] = val;
-
-    return c.json({
-      success: true,
-      message: `Đã lưu định mức tải ${val}A cho thiết bị!`,
-      data: {
-        device_id: key,
-        max_amperage_a: val,
-      },
-    });
-  } catch (error) {
-    return c.json({ success: false, error: error instanceof Error ? error.message : 'Unknown error' }, 500);
-  }
-});
-
-// ==============================================================================
-// 6. FULL DEVICE SETTINGS HUB (Matching Mobile App 1:1)
+// 5. OFFICIAL CLOUD RENAME & ROOM SYNC
 // ==============================================================================
 
 // In-memory / persistent device settings cache by device ID

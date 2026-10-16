@@ -499,32 +499,16 @@ export function Dashboard({
                 </div>
               </div>
 
-              {/* Instant Electrical Parameters */}
+              {/* Instant Electrical Parameters (Matching Official App Function #45823) */}
               <div className="grid grid-cols-3 gap-3 pt-2 text-xs">
                 <div 
-                  onClick={async () => {
-                    const input = window.prompt('Hiệu chuẩn điện áp lưới cơ sở (Volt) theo đồng hồ thực tế:', String(Math.round(voltageV)));
-                    if (input) {
-                      const val = parseFloat(input);
-                      if (!isNaN(val) && val >= 100 && val <= 300) {
-                        try {
-                          await fetch('/api/device/voltage-config', {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ device_id: activeDeviceId, base_voltage_v: val }),
-                          });
-                          setLiveTelemetry((prev) => ({ ...prev, voltageV: val }));
-                        } catch {}
-                      }
-                    }
-                  }}
-                  className="panel-subtle p-3 text-center cursor-pointer hover:border-emerald-500/40 transition-all group"
-                  title="Bấm để hiệu chuẩn nhanh điện áp lưới theo đồng hồ (VD: 230V)"
+                  className="panel-subtle p-3 text-center"
+                  title="Điện áp lưới cung cấp (Volt)"
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-slate-400 text-[10px] uppercase font-semibold block">Điện áp</span>
-                    <span className="text-[9px] font-mono font-bold text-slate-400 group-hover:text-emerald-500 transition-colors">
-                      Hiệu chuẩn
+                    <span className="text-[9px] font-mono font-bold text-emerald-500">
+                      Chuẩn
                     </span>
                   </div>
                   <strong className="text-sm sm:text-base font-bold font-mono text-slate-800 dark:text-slate-100 mt-0.5 block">
@@ -844,7 +828,7 @@ export function Dashboard({
 
       {/* Clean Studio Minimalist Footer */}
       <footer className="border-t border-black/5 dark:border-white/5 py-6 text-center text-xs text-slate-400 dark:text-slate-500">
-        Mitsubishi Heavy 13YZP Telemetry Studio • Native C++ SQLite Storage • Tối ưu 60fps
+        Mitsubishi Heavy 13YZP Telemetry Studio • 100% Official Hunonic Cloud API • Tối ưu 60fps
       </footer>
 
       {/* Add Device / SoftAP Modal */}
