@@ -358,6 +358,15 @@ export function Dashboard({
 
             {/* Quick Actions Header */}
             <div className="flex items-center gap-1.5 sm:gap-2.5 flex-shrink-0">
+              {/* Permanent VIP / Premium Status Badge */}
+              <div 
+                className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-600 dark:text-amber-400 font-bold text-[11px] shadow-sm cursor-default"
+                title="Tài khoản đã được mở khóa toàn bộ tính năng VIP Premium trọn đời trên trạm điều hành cá nhân"
+              >
+                <span>👑</span>
+                <span className="hidden sm:inline">VIP Trọn Đời</span>
+              </div>
+
               {/* Add Device Button */}
               <button
                 onClick={() => setShowAddModal(true)}

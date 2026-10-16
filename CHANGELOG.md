@@ -11,6 +11,7 @@ and follows REA (Reverse Engineering Anything) verified evidence and semantic ve
 
 ### Highlights
 - **100% Reverse-Engineered Official Hunonic Protocol**: Fully mapped REST endpoints, WebSocket Gateway (`wss://web.hunonic.com/gateway/ws`), MQTT topic conventions (`topicpub` / `topicsub`), command contracts (`CMD_10`, `INFO`, `TURN`), and AES-128-CBC key derivation directly from `web.hunonic.com`.
+- **Permanent VIP / Premium Architecture Decoupling**: Injected `is_premium: true`, `role_name: "VIP Premium Trọn Đời"`, and `tier: "gold"` across all local API Gateway routes (`/api/auth/login`, `/api/dashboard/summary`, `/api/user/profile`, `/api/auth/profile`), bypassing the vendor's 1-month trial paywall completely on the self-hosted dashboard.
 - **Pure Real-Time Telemetry (Zero Synthetic Oscillators)**: Completely eliminated all artificial sine wave oscillators, fake noise, and simulated jitter in favor of 100% pure physical electrical telemetry directly from Hunonic Cloud and hardware sensors.
 - **Official Single-Day Ground Truth API (`type: "0"`)**: Integrated `getDayConsumption` to retrieve exact daily energy (`total_power`), meter index at 00:00:00 (`first_power`), and meter index at 23:59:59 (`last_power`).
 - **Elimination of Manual Device Addition**: Replaced manual SoftAP setup steps with 1-click **Cloud Auto-Sync** (`POST /api/devices/sync`) and official **Cloud QR Claiming** (`POST /hun-api/device/add-root`).
@@ -20,9 +21,10 @@ and follows REA (Reverse Engineering Anything) verified evidence and semantic ve
 
 ### Changes
 - **Tool Design (`@rea-tool-design`)**:
+  - Injected permanent `is_premium: true` and golden `👑 VIP Trọn Đời` badge into Dashboard Header.
   - Added `getDayConsumption` and `addRootDevice` to `HunonicApiClient`.
   - Added `POST /api/devices/sync` for instant 1-click discovery of all user devices and rooms.
-  - Displayed `first_power` and `last_power` in `DayDetailModal` with exact daily consumption delta.
+  - Displayed `first_power` and `last_power` in `DayDetailModal` and `HourlyChart` with exact daily consumption delta.
   - Decoupled `app` export from server listener in `src/index.ts` with `samplerTimer.unref()` for non-blocking in-memory contract testing.
   - Standardized device telemetry pipeline in `src/routes/device.ts` with cloud baseline anchoring (`Math.max(cloudTodayKwh, localHourlySum)`).
   - Created `frontend/src/lib/time-utils.ts` providing immutable `getVnDateString()` formatters.

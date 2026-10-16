@@ -48,6 +48,15 @@ export interface SummaryData {
     price: string;
     group_name: string;
   } | null;
+  user?: {
+    id?: string;
+    name: string;
+    phone: string;
+    is_premium: boolean;
+    role_name?: string;
+    tier?: string;
+    premium_date?: string;
+  };
   storage_diagnostics?: {
     total_samples: number;
     retention_policy: string;

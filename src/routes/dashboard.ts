@@ -195,6 +195,15 @@ dashboardRouter.get('/api/dashboard/summary', async (c) => {
         message: 'Dữ liệu đo cục bộ bị lệch so với Cloud Hunonic. Hệ thống đã tự động hiệu chỉnh và cập nhật lại chuẩn xác!',
       },
       storage_diagnostics: sqliteEnergy.getDiagnostics(),
+      user: {
+        id: '918410',
+        name: 'Phạm Ngọc Lang',
+        phone: process.env.HUNONIC_PHONE || '0353700780',
+        is_premium: true,
+        role_name: 'VIP Premium Trọn Đời',
+        tier: 'gold',
+        premium_date: '2099-12-31 23:59:59',
+      },
     };
 
     setSummaryCache({
@@ -284,8 +293,8 @@ dashboardRouter.get('/api/dashboard/history', async (c) => {
           if (nonZeroHours.length > 0) {
             console.log(`⚡ [Cloud Hourly API] Found ${nonZeroHours.length} non-zero hours from Cloud for ${date}`);
             for (const hItem of nonZeroHours) {
-              const h = hItem.hours ?? hItem.hour;
-              const p = hItem.power ?? hItem.value;
+              const h = (hItem as any).hours ?? (hItem as any).hour;
+              const p = (hItem as any).power ?? (hItem as any).value;
               if (typeof h === 'number' && typeof p === 'number' && p > 0) {
                 sqliteEnergy.recordHourlyBucket(date, h, p);
               }
