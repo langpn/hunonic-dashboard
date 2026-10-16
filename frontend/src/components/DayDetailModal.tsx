@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { X, Clock, Zap, TrendingUp, Cloud, Loader2, Calendar } from 'lucide-react';
+import { getVnDateString } from '../lib/time-utils';
 
 interface HourlyPoint {
   hour: number;
@@ -39,8 +40,8 @@ export function DayDetailModal({
     }
   }, [isOpen, dateStr]);
 
-  // Sync real-time ticking kWh for today
-  const isToday = new Date().toISOString().slice(0, 10) === dateStr;
+  // Sync real-time ticking kWh for today (Vietnam timezone GMT+7)
+  const isToday = getVnDateString() === dateStr;
   useEffect(() => {
     if (isToday && dayKwh > 0) {
       setTotalKwh(dayKwh);

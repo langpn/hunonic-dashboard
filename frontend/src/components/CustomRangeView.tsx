@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { Calendar, ArrowRight, Loader2 } from 'lucide-react';
+import { getVnDateString } from '../lib/time-utils';
 import { DailyChart } from './DailyChart';
 
 interface CustomRangeViewProps {
@@ -8,8 +9,8 @@ interface CustomRangeViewProps {
 }
 
 export function CustomRangeView({ ratePrice = 3800, token }: CustomRangeViewProps) {
-  const todayStr = new Date().toISOString().slice(0, 10);
-  const monthAgoStr = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const todayStr = getVnDateString();
+  const monthAgoStr = getVnDateString(new Date(Date.now() - 30 * 24 * 60 * 60 * 1000));
 
   const [startDate, setStartDate] = useState(monthAgoStr);
   const [endDate, setEndDate] = useState(todayStr);
@@ -44,7 +45,7 @@ export function CustomRangeView({ ratePrice = 3800, token }: CustomRangeViewProp
   // Quick Presets
   const setPreset = (daysAgo: number) => {
     const end = todayStr;
-    const start = new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+    const start = getVnDateString(new Date(Date.now() - daysAgo * 24 * 60 * 60 * 1000));
     setStartDate(start);
     setEndDate(end);
     handleFetchRange(start, end);

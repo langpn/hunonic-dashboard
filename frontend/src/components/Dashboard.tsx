@@ -4,6 +4,7 @@ import {
   BarChart2, Zap, LogOut, RefreshCw, Sun, Moon, Wind, Loader2,
   Activity, Cpu, Plus, ChevronDown, Layers, Sliders, X
 } from 'lucide-react';
+import { getVnDateString } from '../lib/time-utils';
 import { ModernCalendar } from './ModernCalendar';
 import { DailyChart } from './DailyChart';
 import { HourlyChart } from './HourlyChart';
@@ -78,8 +79,8 @@ export function Dashboard({
   const [activeMonthData, setActiveMonthData] = useState<any>(summary?.currentMonth || null);
   const [loadingMonth, setLoadingMonth] = useState(false);
 
-  // Selected date state for day-detail view
-  const todayStr = new Date().toISOString().slice(0, 10);
+  // Selected date state for day-detail view (in Vietnam timezone GMT+7)
+  const todayStr = getVnDateString();
   const [selectedDate, setSelectedDate] = useState<string>(todayStr);
 
   const home = summary?.home || { id: '966357', name: 'Nhà của Lang', timezone: 'GMT+07:00' };
@@ -96,7 +97,7 @@ export function Dashboard({
       setActiveDeviceId(String((summary as any).active_device_id));
     }
     if (summary?.today?.kwh) {
-      setLiveTodayKwh(summary.today.kwh);
+      setLiveTodayKwh((prev) => Math.max(prev, summary.today.kwh));
     }
     if (summary?.today?.power_current_w !== undefined) {
       const pw = summary.today.power_current_w;
@@ -132,7 +133,7 @@ export function Dashboard({
         const json = await res.json();
         if (mounted && json.success && json.data) {
           if (json.data.today_kwh !== undefined && json.data.today_kwh > 0) {
-            setLiveTodayKwh(json.data.today_kwh);
+            setLiveTodayKwh((prev) => Math.max(prev, json.data.today_kwh));
           }
           setLiveTelemetry({
             powerW: json.data.power_w,
@@ -219,16 +220,18 @@ export function Dashboard({
     }
     return base.map((d: any) => {
       if (d.date === todayStr) {
-        return { ...d, kwh: liveTodayKwh };
+        return { ...d, kwh: Math.max(d.kwh || 0, liveTodayKwh) };
       }
       return d;
     });
   }, [activeMonthData, todayStr, liveTodayKwh]);
 
   const syncedMonthTotalKwh = useMemo(() => {
-    if (!syncedDailyData.length) return (activeMonthData?.total_power ?? meter?.power_of_month ?? 36.27);
+    const rawPowerOfMonth = meter?.power_of_month ? Number(meter.power_of_month) : 43.14;
+    const officialTotal = activeMonthData?.total_power ?? (rawPowerOfMonth || 43.14);
+    if (!syncedDailyData.length) return officialTotal;
     const sumDays = syncedDailyData.reduce((acc: number, d: any) => acc + (d.kwh || 0), 0);
-    return parseFloat(sumDays.toFixed(2));
+    return parseFloat(Math.max(officialTotal, sumDays).toFixed(2));
   }, [syncedDailyData, activeMonthData, meter]);
 
   // Metrics from API & Live Real-time Sync

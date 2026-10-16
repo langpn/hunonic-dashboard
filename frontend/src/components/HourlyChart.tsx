@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
 import { Clock, Zap, TrendingUp, ChevronLeft, ChevronRight, Loader2, Cloud } from 'lucide-react';
+import { getVnDateString } from '../lib/time-utils';
 
 export interface HourlyPoint {
   hour: number;        // 0 - 23
@@ -16,12 +17,12 @@ interface HourlyChartProps {
 }
 
 export function HourlyChart({
-  initialDate = new Date().toISOString().slice(0, 10),
+  initialDate,
   initialData = [],
   ratePrice = 3800,
   token,
 }: HourlyChartProps) {
-  const [date, setDate] = useState(initialDate);
+  const [date, setDate] = useState(() => initialDate || getVnDateString());
   const [data, setData] = useState<HourlyPoint[]>(initialData);
   const [dayTotalKwh, setDayTotalKwh] = useState(0);
   const [isFromCloud, setIsFromCloud] = useState(false);
@@ -53,15 +54,15 @@ export function HourlyChart({
   };
 
   const handlePrevDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() - 1);
-    setDate(d.toISOString().slice(0, 10));
+    const [y, m, day] = date.split('-').map(Number);
+    const d = new Date(y, m - 1, day - 1);
+    setDate(getVnDateString(d));
   };
 
   const handleNextDay = () => {
-    const d = new Date(date);
-    d.setDate(d.getDate() + 1);
-    setDate(d.toISOString().slice(0, 10));
+    const [y, m, day] = date.split('-').map(Number);
+    const d = new Date(y, m - 1, day + 1);
+    setDate(getVnDateString(d));
   };
 
   // 24-hour structure

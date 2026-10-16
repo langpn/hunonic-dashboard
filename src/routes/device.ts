@@ -1,5 +1,5 @@
 import { Hono } from 'hono';
-import { getClient, getDaemonClient, parseJsonSafe, handleAuthError, setSummaryCache } from '../lib/app-context.js';
+import { getClient, getDaemonClient, parseJsonSafe, handleAuthError, setSummaryCache, summaryCache } from '../lib/app-context.js';
 import { sqliteEnergy, getVnTimeParts } from '../lib/sqlite-db.js';
 
 export const deviceRouter = new Hono();
@@ -120,10 +120,12 @@ deviceRouter.get('/api/device/realtime', async (c) => {
       sqliteEnergy.recordFluctuatingPower(powerW);
     }
 
-    // Real-time live accumulated today kWh from SQLite
+    // Real-time live accumulated today kWh from SQLite, anchored to Cloud baseline
     const { dateStr: todayStr } = getVnTimeParts();
     const todayHourly = sqliteEnergy.getHourlyForDate(todayStr);
-    const realtimeTodayKwh = parseFloat(todayHourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
+    const localHourlyKwh = parseFloat(todayHourly.reduce((sum, r) => sum + r.kwh, 0).toFixed(3));
+    const cloudBaselineKwh = (summaryCache?.data?.today?.date === todayStr) ? (summaryCache.data.today.kwh || 0) : 0;
+    const realtimeTodayKwh = parseFloat(Math.max(cloudBaselineKwh, localHourlyKwh).toFixed(3));
 
     const telemetryData = {
       power_w: powerW,

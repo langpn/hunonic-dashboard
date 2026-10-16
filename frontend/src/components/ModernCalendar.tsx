@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { getVnDateString } from '../lib/time-utils';
 
 export interface DayUsage {
   date: string; // YYYY-MM-DD
@@ -33,8 +34,8 @@ export function ModernCalendar({
       map.set(d.date, d.kwh);
     }
     if (todayKwh !== undefined && todayKwh > 0) {
-      const todayIsoStr = new Date().toISOString().slice(0, 10);
-      map.set(todayIsoStr, todayKwh);
+      const todayIsoStr = getVnDateString();
+      map.set(todayIsoStr, Math.max(map.get(todayIsoStr) || 0, todayKwh));
     }
     return map;
   }, [dailyData, todayKwh]);
@@ -146,7 +147,7 @@ export function ModernCalendar({
       <div className="grid grid-cols-7 gap-2 sm:gap-2.5">
         {calendarCells.map((cell) => {
           const isSelected = selectedDate === cell.dateStr;
-          const isToday = cell.dateStr === new Date().toISOString().slice(0, 10);
+          const isToday = cell.dateStr === getVnDateString();
           const hasKwh = cell.isCurrentMonth && cell.kwh !== undefined && cell.kwh > 0;
 
           // Inactive filler day

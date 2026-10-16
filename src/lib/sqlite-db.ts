@@ -157,7 +157,25 @@ class SqliteEnergyEngine {
     // Case 2: Local data is already tracking within 10% of cloud, don't overwrite
     if (localTotal >= cloudTotalKwh * 0.90 && localTotal <= cloudTotalKwh * 1.15) return;
 
-    const missingKwh = parseFloat((cloudTotalKwh - localTotal).toFixed(3));
+    // Case 2a: Local data exists but lags behind Cloud (e.g. 0.33 kWh vs 0.48 kWh) -> Scale up to match Cloud
+    if (localTotal > 0 && localTotal < cloudTotalKwh * 0.90) {
+      const scaleUpRatio = cloudTotalKwh / localTotal;
+      console.log(`⚡ [SQLite Rescale] Local total ${localTotal.toFixed(3)}kWh was lagging behind Cloud ${cloudTotalKwh.toFixed(3)}kWh. Scaling up to match Cloud (ratio: ${scaleUpRatio.toFixed(3)})`);
+
+      const rows = this.db.prepare('SELECT hour, kwh, avg_power_w, max_power_w FROM hourly_buckets WHERE date = ? AND kwh > 0').all(dateStr) as any[];
+      const updateStmt = this.db.prepare('UPDATE hourly_buckets SET kwh = ?, avg_power_w = ?, max_power_w = ? WHERE date = ? AND hour = ?');
+
+      for (const r of rows) {
+        const scaledKwh = parseFloat((r.kwh * scaleUpRatio).toFixed(4));
+        const scaledAvg = Math.min(1240, Math.round(r.avg_power_w * scaleUpRatio));
+        const scaledMax = Math.min(1240, Math.max(scaledAvg, Math.round(r.max_power_w * scaleUpRatio)));
+        updateStmt.run(scaledKwh, scaledAvg, scaledMax, dateStr, r.hour);
+      }
+      return;
+    }
+
+    // Case 2b: Local SQLite has 0 records yet for this date -> Seed candidate hours
+    const missingKwh = parseFloat(cloudTotalKwh.toFixed(3));
     if (missingKwh <= 0.005) return;
 
     // Determine target hours to allocate missing energy based on AC usage pattern:
@@ -180,9 +198,9 @@ class SqliteEnergyEngine {
       INSERT INTO hourly_buckets (date, hour, kwh, avg_power_w, min_power_w, max_power_w, samples_count, last_w, last_time)
       VALUES (?, ?, ?, ?, 20, ?, 60, ?, ?)
       ON CONFLICT(date, hour) DO UPDATE SET
-        kwh = CASE WHEN kwh <= 0 THEN excluded.kwh ELSE kwh END,
-        avg_power_w = CASE WHEN avg_power_w <= 0 THEN excluded.avg_power_w ELSE avg_power_w END,
-        max_power_w = CASE WHEN max_power_w <= 0 THEN excluded.max_power_w ELSE max_power_w END
+        kwh = excluded.kwh,
+        avg_power_w = excluded.avg_power_w,
+        max_power_w = excluded.max_power_w
     `);
 
     const nowMs = Date.now();
