@@ -53,6 +53,7 @@ export interface Device {
   money_of_month?: number;
   power_of_prev_month?: string;
   money_of_prev_month?: number;
+  voltage?: string;
 }
 
 export interface ElectricityRateItem {
@@ -354,6 +355,35 @@ export class HunonicApiClient {
   }
 
   /**
+   * Get single-day consumption from Hunonic Cloud API (Type 0)
+   * Returns exact total kWh, first_power (index at 00:00:00), and last_power (index at 23:59:59)
+   */
+  async getDayConsumption(rootId: string, dateStr: string): Promise<{
+    date: string;
+    total_power: number;
+    first_power: number;
+    last_power: number;
+  }> {
+    const [year, month] = dateStr.split('-');
+    const res = await this.getGraphData({
+      type: '0',
+      root_id: rootId,
+      time_start: dateStr,
+      time_end: dateStr,
+      year: year || new Date().getFullYear().toString(),
+      month: month || (new Date().getMonth() + 1).toString().padStart(2, '0'),
+    });
+
+    const total_power = res.total_power || (res.graph_data?.[0]?.value ?? 0);
+    return {
+      date: dateStr,
+      total_power,
+      first_power: res.first_power || 0,
+      last_power: res.last_power || (res.first_power ? parseFloat((res.first_power + total_power).toFixed(2)) : 0),
+    };
+  }
+
+  /**
    * Get current month daily consumption
    */
   async getMonthConsumption(rootId: string, targetYear?: number, targetMonth?: number): Promise<GraphDataResponse['data']> {
@@ -479,6 +509,20 @@ export class HunonicApiClient {
       }
     );
     return !!res.status;
+  }
+
+  /**
+   * Add / Claim device to home on official Hunonic Cloud (POST /hun-api/device/add-root)
+   */
+  async addRootDevice(params: { root_id: string; home_id?: string; name?: string; room_id?: string }): Promise<any> {
+    const res = await this.request<{ status: boolean; message: string; data?: any }>(
+      '/hun-api/device/add-root',
+      {
+        method: 'POST',
+        body: JSON.stringify(params),
+      }
+    );
+    return res;
   }
 }
 

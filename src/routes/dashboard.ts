@@ -254,17 +254,16 @@ dashboardRouter.get('/api/dashboard/history', async (c) => {
       const { dateStr: defaultVnDate } = getVnTimeParts();
       const date = c.req.query('date') || defaultVnDate;
 
-      // 1. Check verified daily total from Hunonic Cloud API
+      // 1. Fetch verified single-day data from Hunonic Cloud API (Type 0)
       let cloudTotalKwh = 0;
+      let firstPower = 0;
+      let lastPower = 0;
+
       try {
-        const cloudRes = await client.getGraphData({
-          type: '0',
-          root_id: meter.root_id,
-          time_start: date,
-          time_end: date,
-          year: date.slice(0, 4),
-        });
-        cloudTotalKwh = cloudRes.total_power || (cloudRes.graph_data?.[0]?.value ?? 0);
+        const dayRes = await client.getDayConsumption(meter.root_id, date);
+        cloudTotalKwh = dayRes.total_power || 0;
+        firstPower = dayRes.first_power || 0;
+        lastPower = dayRes.last_power || 0;
       } catch (e) {
         console.warn(`Failed to fetch cloud day data for ${date}:`, e);
       }
@@ -285,6 +284,8 @@ dashboardRouter.get('/api/dashboard/history', async (c) => {
         data: {
           date,
           total_kwh: finalTotalKwh,
+          first_power: firstPower,
+          last_power: lastPower,
           peak_hour: peakRecord ? peakRecord.hour : 0,
           peak_power_w: peakRecord ? peakRecord.avg_power_w : 0,
           is_from_cloud: cloudTotalKwh > 0 && localTotalKwh < cloudTotalKwh * 0.95,

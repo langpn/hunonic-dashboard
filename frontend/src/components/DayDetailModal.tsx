@@ -29,6 +29,8 @@ export function DayDetailModal({
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<HourlyPoint[]>([]);
   const [totalKwh, setTotalKwh] = useState(dayKwh);
+  const [firstPower, setFirstPower] = useState(0);
+  const [lastPower, setLastPower] = useState(0);
   const [peakHour, setPeakHour] = useState(0);
   const [peakPowerW, setPeakPowerW] = useState(0);
   const [isFromCloud, setIsFromCloud] = useState(false);
@@ -62,6 +64,8 @@ export function DayDetailModal({
         setData(json.data.hourly || []);
         const serverKwh = json.data.total_kwh || 0;
         setTotalKwh(isToday && dayKwh > 0 ? Math.max(serverKwh, dayKwh) : serverKwh || dayKwh);
+        setFirstPower(json.data.first_power || 0);
+        setLastPower(json.data.last_power || 0);
         setPeakHour(json.data.peak_hour || 0);
         setPeakPowerW(Math.min(1240, json.data.peak_power_w || 0)); // Capped at real AC physical max 1240W
         setIsFromCloud(!!json.data.is_from_cloud);
@@ -172,6 +176,32 @@ export function DayDetailModal({
               </span>
             </div>
           </div>
+
+          {/* Official Ground Truth Meter Indices (From Hunonic Cloud Day API Type 0) */}
+          {(firstPower > 0 || lastPower > 0) && (
+            <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-[#1a202c] border border-slate-200/80 dark:border-white/5 flex items-center justify-between text-xs">
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block">Chỉ số đầu ngày (00:00)</span>
+                <strong className="text-sm font-bold font-mono text-slate-700 dark:text-slate-300 mt-0.5 block">
+                  {firstPower.toFixed(2)} <span className="text-[10px] font-normal text-slate-400">kWh</span>
+                </strong>
+              </div>
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2" />
+              <div>
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block">Chỉ số cuối ngày (23:59)</span>
+                <strong className="text-sm font-bold font-mono text-emerald-600 dark:text-emerald-400 mt-0.5 block">
+                  {lastPower.toFixed(2)} <span className="text-[10px] font-normal text-slate-400">kWh</span>
+                </strong>
+              </div>
+              <div className="h-6 w-px bg-slate-200 dark:bg-slate-700 mx-1 sm:mx-2" />
+              <div className="text-right">
+                <span className="text-[10px] uppercase font-semibold text-slate-400 block">Chênh lệch chuẩn</span>
+                <strong className="text-sm font-bold font-mono text-sky-600 dark:text-sky-400 mt-0.5 block">
+                  +{(lastPower >= firstPower && firstPower > 0 ? lastPower - firstPower : totalKwh).toFixed(2)} <span className="text-[10px] font-normal text-slate-400">kWh</span>
+                </strong>
+              </div>
+            </div>
+          )}
 
           {/* Active Hover / Peak Telemetry Preview */}
           <div className="grid grid-cols-3 gap-3 p-3 rounded-xl bg-slate-50 dark:bg-[#1a202c] border border-slate-200/80 dark:border-white/5 text-xs">
