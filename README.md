@@ -129,6 +129,57 @@ Hệ thống cung cấp sẵn REST API đầy đủ cho nhà phát triển muố
 
 ---
 
+## 🔬 Nghiên Cứu Đảo Ngược & Giao Thức Mạng (REA Reverse-Engineering Specs)
+
+Dự án được xây dựng dựa trên việc phân tích giao thức mạng và mã nguồn JavaScript của nền tảng chính thức **`https://web.hunonic.com`**:
+
+### 1. WebSocket Gateway & Cơ Chế Đẩy Dữ Liệu Realtime
+* **Điểm kết nối:** `wss://web.hunonic.com/gateway/ws?token=<USER_JWT_TOKEN>`
+* **Cơ chế kênh (Topic Pub/Sub):** Mỗi thiết bị công tơ sở hữu 2 topic mã hóa Base64:
+  - `topicpub`: Kênh thiết bị phát dữ liệu điện năng lên máy chủ.
+  - `topicsub`: Kênh máy chủ truyền lệnh điều khiển và truy vấn xuống thiết bị.
+* **Lệnh đo đạc thời gian thực (`CMD_10`):** Máy chủ chính thức gửi bản tin truy vấn `CMD_10` định kỳ **5 giây/lần** (`setInterval(..., 5000)`) để lấy trọn bộ thông số: Công suất (W), Điện áp (V), Dòng điện (A), Hệ số công suất (PF), Tần số (Hz) và Dòng rò (mA).
+
+### 2. Thuật Toán Dẫn Xuất Khóa Mã Hóa Thiết Bị (AES-128-CBC)
+Dữ liệu gửi nhận giữa máy chủ và công tơ được bảo vệ bằng chuẩn mã hóa đối xứng AES-128-CBC:
+* **Khóa gốc (Master Key & IV):** Chuỗi 16 byte ký tự 0 ASCII (`"0000000000000000"`).
+* **Quy trình sinh khóa:**
+  1. Mã hóa chuỗi `root_id` của công tơ bằng AES-128-CBC với Master Key & IV.
+  2. **Derived AES Key (16 bytes):** Trích xuất từ byte 4 đến byte 20 của chuỗi mã hóa.
+  3. **Derived AES IV (16 bytes):** Trích xuất từ byte 12 đến byte 28 của chuỗi mã hóa.
+* **Giải mã payload:** Dữ liệu bản tin Base64 được giải mã qua AES-128-CBC bằng cặp Derived Key & IV này.
+
+### 3. Quy Chuẩn Giải Mã Công Suất (Deci-Watt Encoding)
+* Máy chủ Hunonic mã hóa các giá trị công suất thực tế lớn hơn 130W dưới dạng **Deci-watt (0.1W)** để tối ưu băng thông truyền số nguyên.
+* Ví dụ: Giá trị thô `1883` ➔ **`188.3 W`**; Giá trị thô `5125` ➔ **`512.5 W`**.
+* Hệ thống tự động nhận diện ngưỡng `> 1300` và chia tỷ lệ `/ 10` chuẩn xác, triệt tiêu hoàn toàn lỗi nhân 10x công suất trước đây.
+
+---
+
+## 🧪 Hệ Thống Kiểm Thử Tự Động (Automated CI Test Suite)
+
+Dự án tích hợp bộ kiểm thử tự động native của Node.js (`node:test` & `node:assert`), không cần cài đặt thêm bất kỳ thư viện ngoài nào:
+
+```bash
+npm test
+```
+
+### Các nhóm kiểm thử cốt tử (Test Suites):
+1. **`tests/timezone.test.ts` (Kiểm thử Múi giờ Việt Nam GMT+7):**
+   - Đảm bảo các khung giờ nửa đêm (00:01 AM, 02:19 AM, 06:59 AM) tại Việt Nam không bao giờ bị phương thức UTC `.toISOString()` kéo lùi về ngày hôm qua.
+   - Bảo vệ mảng dữ liệu lịch sử không bị ghi đè nhầm số điện ngày trước.
+2. **`tests/energy-integration.test.ts` (Kiểm thử Tích phân Năng lượng & Ampe):**
+   - Kiểm tra thuật toán giải mã Deci-watt.
+   - Kiểm thử công thức tính dòng điện Ampe theo hệ số công suất động $P = U \cdot I \cdot \cos\varphi$ (kẹp trần 5.7A theo máy lạnh Mitsubishi Heavy 13YZP).
+   - Kiểm thử tích phân hình thang năng lượng: 1000W chạy trong 1 giờ cho ra đúng $1.000\text{ kWh}$.
+3. **`tests/sqlite-reconciliation.test.ts` (Kiểm thử Bất biến Đối soát SQLite):**
+   - Kiểm thử cơ chế nén dữ liệu phồng (Scale-down).
+   - Kiểm thử cơ chế bù dữ liệu khuyết (Scale-up) khi SQLite bị hụt so với Cloud, triệt tiêu hoàn toàn hiện tượng lệch $0.149\text{ kWh}$.
+4. **`tests/api-contracts.test.ts` (Kiểm thử Hợp đồng API REST):**
+   - Kiểm thử in-memory toàn bộ các endpoint `/health`, `/api/device/realtime`, `/api/dashboard/history`.
+
+---
+
 ## 🔒 Cam Kết Không Khóa Dữ Liệu (No Vendor Lock-in)
 
 - Bạn hoàn toàn làm chủ dữ liệu của mình. Dữ liệu trên công tơ và Cloud gốc Hunonic không bao giờ bị can thiệp hay xóa mất.

@@ -36,7 +36,7 @@ app.use('/*', serveStatic({ root: './frontend/dist' }));
 app.get('*', serveStatic({ path: './frontend/dist/index.html' }));
 
 // Background auto-sampler: integrate fluctuating power into SQLite every 15s (Zero Waste)
-setInterval(async () => {
+const samplerTimer = setInterval(async () => {
   try {
     const client = getClient();
     const devices = await client.getDevicesByHome();
@@ -52,15 +52,21 @@ setInterval(async () => {
     // Non-blocking background sampler
   }
 }, 15 * 1000);
+if (samplerTimer.unref) samplerTimer.unref();
 
+const isTest = process.env.NODE_ENV === 'test' || process.argv.some(arg => arg.includes('test'));
 const port = parseInt(process.env.PORT || '3000', 10);
-serve({
-  fetch: app.fetch,
-  port,
-}, (info) => {
-  console.log(`⚡ Hunonic Studio Server running at http://localhost:${info.port}`);
-});
 
+if (!isTest) {
+  serve({
+    fetch: app.fetch,
+    port,
+  }, (info) => {
+    console.log(`⚡ Hunonic Studio Server running at http://localhost:${info.port}`);
+  });
+}
+
+export { app };
 export default {
   fetch: app.fetch,
   port,
