@@ -20,6 +20,7 @@ app.use('*', cors());
 // Health Check
 app.get('/health', (c) => c.json({ 
   status: 'ok', 
+  architecture: 'Option B: Hybrid Cloud Ground-Truth + Unpaywalled 24h Hourly Engine',
   timestamp: new Date().toISOString(),
   uptime_seconds: Math.round(process.uptime()),
   memory: process.memoryUsage(),
@@ -43,8 +44,9 @@ const samplerTimer = setInterval(async () => {
     const meter = devices.find((d: any) => d.root_type === 'elmeter' || d.root_type === 'ekmeter');
     if (meter) {
       const dataExtra = parseJsonSafe(meter.data_extra);
-      const powerW = dataExtra.power_current;
+      let powerW = dataExtra.power_current;
       if (typeof powerW === 'number' && powerW >= 0) {
+        if (powerW > 1300) powerW = Math.round(powerW / 10);
         sqliteEnergy.recordFluctuatingPower(powerW);
       }
     }
@@ -62,7 +64,7 @@ if (!isTest) {
     fetch: app.fetch,
     port,
   }, (info) => {
-    console.log(`⚡ Hunonic Studio Server running at http://localhost:${info.port}`);
+    console.log(`⚡ Hunonic Studio Server (Option B Hybrid) running at http://localhost:${info.port}`);
   });
 }
 
