@@ -787,7 +787,14 @@ export function Dashboard({
                   }}
                 />
               ) : (
-                <DailyChart data={syncedDailyData} ratePrice={ratePrice} />
+                <DailyChart 
+                  data={syncedDailyData} 
+                  ratePrice={ratePrice} 
+                  onSelectDay={(dateStr, kwh) => {
+                    setSelectedDate(dateStr);
+                    setSelectedDayDetail({ dateStr, kwh });
+                  }}
+                />
               )}
             </div>
           </div>

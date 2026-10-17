@@ -31,6 +31,13 @@ export function HourlyChart({
   const [loading, setLoading] = useState(false);
   const [hoveredHour, setHoveredHour] = useState<HourlyPoint | null>(null);
 
+  // Synchronize internal date state when parent passes a new initialDate
+  useEffect(() => {
+    if (initialDate && initialDate !== date) {
+      setDate(initialDate);
+    }
+  }, [initialDate]);
+
   useEffect(() => {
     fetchDayData(date);
   }, [date]);

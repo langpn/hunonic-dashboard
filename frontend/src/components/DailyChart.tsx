@@ -11,9 +11,10 @@ export interface DailyPoint {
 interface DailyChartProps {
   data: DailyPoint[];
   ratePrice?: number;
+  onSelectDay?: (date: string, kwh: number) => void;
 }
 
-export function DailyChart({ data, ratePrice = 3800 }: DailyChartProps) {
+export function DailyChart({ data, ratePrice = 3800, onSelectDay }: DailyChartProps) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
 
   if (!data || data.length === 0) {
@@ -162,6 +163,7 @@ export function DailyChart({ data, ratePrice = 3800 }: DailyChartProps) {
               <g
                 key={i}
                 className="cursor-pointer"
+                onClick={() => onSelectDay?.(p.date, p.kwh)}
                 onMouseEnter={() => setHoveredIndex(i)}
                 onMouseLeave={() => setHoveredIndex(null)}
               >
